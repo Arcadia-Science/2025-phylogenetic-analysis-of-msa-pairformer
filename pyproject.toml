@@ -3,7 +3,7 @@ name = "notebook-pub-contents"
 description = "Python project for notebook publication."
 version = "0.0.0"
 readme = "README.md"
-requires-python = ">=3.12"
+requires-python = ">=3.10"
 license = { file = "LICENSE" }
 
 [build-system]
@@ -11,7 +11,7 @@ requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
-where = ["src"]
+where = ["src", "MSA_Pairformer"]
 
 [tool.ruff]
 # The directories to consider when resolving first- vs. third-party imports
@@ -21,6 +21,9 @@ indent-width = 4
 
 # run ruff on jupyter notebooks (this is not enabled by default)
 extend-include = ["*.ipynb"]
+
+# exclude MSA_Pairformer submodule from formatting
+exclude = ["MSA_Pairformer"]
 
 [tool.ruff.lint.per-file-ignores]
 # ignore star and unused imports

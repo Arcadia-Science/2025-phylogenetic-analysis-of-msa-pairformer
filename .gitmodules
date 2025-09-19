@@ -1,0 +1,3 @@
+[submodule "MSA_Pairformer"]
+	path = MSA_Pairformer
+	url = https://github.com/yoakiyama/MSA_Pairformer.git
