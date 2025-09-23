@@ -257,7 +257,7 @@ def fetch_pdb_rr_domains(output_file: Path, pdb_entries: dict[str, str]) -> None
     print(f"Saved {len(sequences)} PDB sequences to {output_file}")
 
 
-def process(
+def download_and_process_msa(
     family_id: Annotated[
         str,
         typer.Option(help="Main family ID ({family_id} in paper)"),
@@ -444,4 +444,4 @@ def process(
 
 
 if __name__ == "__main__":
-    typer.run(process)
+    typer.run(download_and_process_msa)
