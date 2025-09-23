@@ -410,6 +410,22 @@ def process(
             ),
         )
 
+        # --- Convert to FASTA for convenient reference
+        subset_fasta = subset_a3m.with_suffix(".fasta")
+        _get_or_compute(
+            subset_fasta,
+            lambda: subprocess.run(
+                [
+                    "reformat.pl",
+                    "a3m",
+                    "fas",
+                    str(subset_a3m),
+                    str(subset_fasta),
+                ],
+                check=True,
+            ),
+        )
+
         if not keep_intermediate:
             # Copy only the final subset MSA to output dir
             output_a3m = output_dir / subset_a3m.name
@@ -419,6 +435,10 @@ def process(
             output_sto = output_dir / subset_sto.name
             if not output_sto.exists():
                 shutil.copy(subset_sto, output_sto)
+
+            output_fasta = output_dir / subset_fasta.name
+            if not output_fasta.exists():
+                shutil.copy(subset_fasta, output_fasta)
 
     print("Processing complete!")
 
