@@ -5,7 +5,7 @@ project:
   - '*.ipynb'
   - 'examples/*.ipynb'
   - 'pages/*.qmd'
-  - '!MSA_Pairformer/MSA_Pairformer_with_MMseqs2.ipynb'
+  - '!msa_pairformer_repo/MSA_Pairformer_with_MMseqs2.ipynb'
   resources:
   - assets/*
   - authors.yml

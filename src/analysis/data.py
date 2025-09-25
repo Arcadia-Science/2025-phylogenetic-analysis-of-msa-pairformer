@@ -1,7 +1,6 @@
 from typing import Any
 
 import torch
-
 from MSA_Pairformer.dataset import MSA, aa2tok_d, prepare_msa_masks
 
 
@@ -34,3 +33,12 @@ def get_model_input_data(msa: MSA, device: torch.device) -> dict[str, torch.Tens
 
 def get_sequence_weight_data(model_results: dict[str, Any]) -> torch.Tensor:
     return torch.concat(tuple(model_results["seq_weights_list_d"].values()), dim=0)
+
+
+def to_cpu_dict(obj: Any) -> Any:
+    if torch.is_tensor(obj):
+        return obj.cpu()
+    elif isinstance(obj, dict):
+        return {k: to_cpu_dict(v) for k, v in obj.items()}
+    else:
+        return obj
