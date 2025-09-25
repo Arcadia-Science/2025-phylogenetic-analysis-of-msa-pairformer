@@ -1,12 +1,12 @@
 from typing import Any
 
 import torch
-from MSA_Pairformer.dataset import MSA
-from MSA_Pairformer.model import MSAPairformer
 from torch.amp.autocast_mode import autocast
 
 from analysis.data import get_model_input_data, to_cpu_dict
 from analysis.modal_infrastructure import image, modal_run_settings, volume
+from MSA_Pairformer.dataset import MSA
+from MSA_Pairformer.model import MSAPairformer
 
 
 @modal_run_settings(
