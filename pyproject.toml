@@ -10,8 +10,12 @@ license = { file = "LICENSE" }
 requires = ["setuptools", "wheel"]
 build-backend = "setuptools.build_meta"
 
-[tool.setuptools.packages.find]
-where = ["src", "MSA_Pairformer"]
+[tool.setuptools]
+packages = ["analysis", "MSA_Pairformer"]
+
+[tool.setuptools.package-dir]
+analysis = "src/analysis"
+MSA_Pairformer = "MSA_Pairformer/MSA_Pairformer"
 
 [tool.ruff]
 # The directories to consider when resolving first- vs. third-party imports
