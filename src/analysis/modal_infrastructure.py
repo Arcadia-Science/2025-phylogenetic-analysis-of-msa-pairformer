@@ -3,7 +3,6 @@ import subprocess
 from collections.abc import Callable, Sequence
 from functools import wraps
 from pathlib import Path
-from typing import TypeVar
 
 import modal
 
@@ -37,10 +36,7 @@ def _collect_paths(obj) -> set[Path]:
         return set()
 
 
-T = TypeVar("T")
-
-
-def _resolve_path_args(obj: T) -> T:
+def _resolve_path_args(obj):
     if isinstance(obj, Path):
         return obj.resolve()
     elif isinstance(obj, list | tuple):
@@ -116,11 +112,11 @@ def modal_run_settings(
     """
 
     def decorator(func):
-        if not use_modal():
-            return func
-
         @wraps(func)
         def wrapper(*args, **kwargs):
+            if not use_modal():
+                return func(*args, **kwargs)
+
             image = base_image
 
             resolved_local_dir = None
