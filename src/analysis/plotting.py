@@ -236,7 +236,9 @@ def interactive_layer_weight_plot(df: pd.DataFrame, num_layers: int = 22) -> go.
 
     x_min = df["patristic_distance"].min()
     x_max = df["patristic_distance"].max()
-    fig.update_xaxes(range=[x_min, x_max], matches="x")
+    x_diff = x_max - x_min
+    fig.update_xaxes(range=[x_min - 0.02 * x_diff, x_max + 0.02 * x_diff], matches="x")
+    fig.update_yaxes(rangemode="tozero")
 
     apc.plotly.style_plot(fig, monospaced_axes="all", row=1, col=1)
     apc.plotly.style_plot(fig, monospaced_axes="all", row=1, col=2)
