@@ -13,7 +13,7 @@ from MSA_Pairformer.model import MSAPairformer
     app_name="msa-pairformer-inference",
     base_image=image,
     volumes={"/data": volume},
-    gpu="T4",
+    gpu="H100",
 )
 def run_inference(
     msa: MSA,
