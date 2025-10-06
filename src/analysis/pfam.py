@@ -2,9 +2,11 @@ import gzip
 import shutil
 import subprocess
 import tempfile
+from collections.abc import Callable
 from pathlib import Path
-from typing import Annotated
+from typing import Annotated, Any
 
+import pandas as pd
 import requests
 import typer
 from Bio import AlignIO
@@ -64,46 +66,23 @@ def download_and_process_response_regulator_msa(
         Path,
         typer.Option(help="Artifacts will be stored in this directory."),
     ],
-    reference: Annotated[
-        str,
-        typer.Option(help="The sequence treated as the query"),
-    ] = "4CBV",
     subset_size: Annotated[
         int, typer.Option(help="Target number of sequences for diversity filtering (approximate)")
     ] = 4096,
-    keep_intermediate: Annotated[
-        bool,
-        typer.Option(help="Whether to keep intermediate files"),
-    ] = True,
 ):
     pfam_to_pdb_rep = {
         "PF00486": "1NXS",
         "PF04397": "4CBV",
         "PF00196": "4E7P",
     }
-    assert reference in pfam_to_pdb_rep.values(), (
-        f"`reference` must be one of {list(pfam_to_pdb_rep.values())}"
-    )
+    subfamily_names = ["OmpR", "LytTR", "GerE"]
+    subfamily_ids = list(pfam_to_pdb_rep.keys())
+    references = list(pfam_to_pdb_rep.values())
 
     output_dir.mkdir(exist_ok=True)
 
     family_id = "PF00072"
-    subfamily_ids = list(pfam_to_pdb_rep.keys())
     all_pfam_ids = [family_id] + subfamily_ids
-
-    def _get_or_compute(tmp_file: Path, compute_fn=None) -> None:
-        """Check if file exists in output_dir, copy if yes, compute if no."""
-        output_file = output_dir / tmp_file.name
-        if output_file.exists():
-            shutil.copy(output_file, tmp_file)
-            print(f"Using cached: {tmp_file.name}")
-            return
-
-        if compute_fn:
-            compute_fn()
-
-        if keep_intermediate:
-            shutil.copy(tmp_file, output_file)
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)
@@ -113,14 +92,16 @@ def download_and_process_response_regulator_msa(
             sto_file = tmpdir / f"{pfam_id}.full.sto"
             _get_or_compute(
                 sto_file,
+                output_dir,
                 lambda pfam_id=pfam_id, sto_file=sto_file: download_pfam(pfam_id, sto_file, "full"),
             )
 
-        # --- Subset family PFAM to only include members from each subfamily
+        # --- Filter family PFAM to only include members from each subfamily
         source_sto = tmpdir / f"{family_id}.full.sto"
         filtered_sto = tmpdir / f"{family_id}.filtered.sto"
         _get_or_compute(
             filtered_sto,
+            output_dir,
             lambda: _filter_sto(
                 source=source_sto,
                 output=filtered_sto,
@@ -128,78 +109,113 @@ def download_and_process_response_regulator_msa(
             ),
         )
 
+        # --- Convert from STO to A3M (for hhfilter)
+        filtered_a3m = filtered_sto.with_suffix(".a3m")
+        _get_or_compute(
+            filtered_a3m,
+            output_dir,
+            lambda: reformat_alignment(filtered_sto, filtered_a3m, "sto", "a3m"),
+        )
+
+        # --- Subset with hhfilter down to the subset size
+        subset_a3m = tmpdir / f"{family_id}.subset.a3m"
+        _get_or_compute(
+            subset_a3m,
+            output_dir,
+            lambda: _apply_hhfilter_strategy(
+                input_a3m=filtered_a3m,
+                output_a3m=subset_a3m,
+                target_size=subset_size - len(subfamily_ids),
+            ),
+        )
+
+        # --- Convert from A3M to STO (for HMMER)
+        subset_sto = subset_a3m.with_suffix(".sto")
+        _get_or_compute(
+            subset_sto,
+            output_dir,
+            lambda: reformat_alignment(subset_a3m, subset_sto, "a3m", "sto"),
+        )
+
         # --- Build an HMM profile with DESC line
-        hmm_file = filtered_sto.with_suffix(".hmm")
+        hmm_file = subset_sto.with_suffix(".hmm")
         _get_or_compute(
             hmm_file,
+            output_dir,
             lambda: _build_hmm(
                 hmm_file=hmm_file,
-                sto_file=filtered_sto,
+                sto_file=subset_sto,
                 desc=f"{family_id} HMM Profile",
             ),
         )
 
-        # --- Add in the representative, saving to STO
-        filtered_with_ref_sto = tmpdir / f"{family_id}.filtered_with_{reference}.sto"
+        # --- Add in the representative sequences, saving aligned version
         pdb_fasta = output_dir / "pdb_rr.fasta"
+        aligned_sto = tmpdir / f"{family_id}.final.sto"
         _get_or_compute(
-            filtered_with_ref_sto,
-            lambda: _hmmalign_with_reference_first(
+            aligned_sto,
+            output_dir,
+            lambda: _hmmalign(
                 hmm_file=hmm_file,
-                mapali_file=filtered_sto,
+                mapali_file=subset_sto,
                 sequences_file=pdb_fasta,
-                output_file=filtered_with_ref_sto,
-                reference_id=reference,
+                output_file=aligned_sto,
             ),
         )
 
-        # --- Convert from STO to A3M (for hhblits filtering)
-        filtered_with_ref_a3m = filtered_with_ref_sto.with_suffix(".a3m")
-        _get_or_compute(
-            filtered_with_ref_a3m,
-            lambda: reformat_alignment(filtered_with_ref_sto, filtered_with_ref_a3m, "sto", "a3m"),
-        )
+        # --- Convert aligned file to other formats
+        _convert_alignment_formats(aligned_sto, output_dir)
 
-        # --- Filter with hhfilter down to the subset size
-        subset_a3m = tmpdir / f"{family_id}.final_{reference}.a3m"
+        # --- Calculate membership and store results in TSV
+        membership_path = tmpdir / "membership.txt"
+        source_alignment_paths = {
+            name: Path(output_dir / f"{id}.full.sto")
+            for name, id in zip(subfamily_names, subfamily_ids, strict=True)
+        }
+        query_mapping = dict(zip(pfam_to_pdb_rep.values(), subfamily_names, strict=True))
         _get_or_compute(
-            subset_a3m,
-            lambda: _apply_hhfilter_strategy(
-                input_a3m=filtered_with_ref_a3m,
-                output_a3m=subset_a3m,
-                target_size=subset_size,
+            membership_path,
+            output_dir,
+            lambda: _calculate_membership(
+                aligned_sto, query_mapping, source_alignment_paths, membership_path
             ),
         )
 
-        # --- Convert to STO for convenient reference
-        subset_sto = subset_a3m.with_suffix(".sto")
-        _get_or_compute(
-            subset_sto,
-            lambda: reformat_alignment(subset_a3m, subset_sto, "a3m", "sto"),
-        )
+        for reference in references:
+            # --- Reorder alignment with reference first
+            final_sto = tmpdir / f"{family_id}.final_{reference}.sto"
+            _get_or_compute(
+                final_sto,
+                output_dir,
+                lambda ref=reference, final=final_sto: _reorder_alignment_with_reference_first(
+                    input_sto=aligned_sto,
+                    output_sto=final,
+                    reference_id=ref,
+                ),
+            )
 
-        # --- Convert to FASTA for convenient reference
-        subset_fasta = subset_a3m.with_suffix(".fasta")
-        _get_or_compute(
-            subset_fasta,
-            lambda: reformat_alignment(subset_a3m, subset_fasta, "a3m", "fas"),
-        )
-
-        if not keep_intermediate:
-            # Copy only the final subset MSA to output dir
-            output_a3m = output_dir / subset_a3m.name
-            if not output_a3m.exists():
-                shutil.copy(subset_a3m, output_a3m)
-
-            output_sto = output_dir / subset_sto.name
-            if not output_sto.exists():
-                shutil.copy(subset_sto, output_sto)
-
-            output_fasta = output_dir / subset_fasta.name
-            if not output_fasta.exists():
-                shutil.copy(subset_fasta, output_fasta)
+            # --- Convert final alignment to other formats
+            _convert_alignment_formats(final_sto, output_dir)
 
     print("Processing complete!")
+
+
+def _get_or_compute(
+    tmp_file: Path,
+    output_dir: Path,
+    compute_fn: Callable[[], Any],
+) -> None:
+    """Check if file exists in output_dir, copy if yes, compute if no."""
+    output_file = output_dir / tmp_file.name
+    if output_file.exists():
+        shutil.copy(output_file, tmp_file)
+        print(f"Using cached: {tmp_file.name}")
+        return
+
+    if compute_fn:
+        compute_fn()
+
+    shutil.copy(tmp_file, output_file)
 
 
 def _build_url(pfam_id: str, atype: str) -> str:
@@ -239,57 +255,103 @@ def _build_hmm(hmm_file: Path, sto_file: Path, desc: str) -> None:
                 f.write(line)
 
 
-def _hmmalign_with_reference_first(
+def _hmmalign(
     hmm_file: Path,
     mapali_file: Path,
     sequences_file: Path,
     output_file: Path,
-    reference_id: str,
 ) -> None:
     """
-    Run hmmalign and ensure reference sequence appears first in the output STO file.
+    Run hmmalign to align sequences using HMM profile.
 
     Args:
         hmm_file: HMM profile file
         mapali_file: Map alignment file (--mapali)
         sequences_file: FASTA file with sequences to thread
         output_file: Output STO file
+    """
+    subprocess.run(
+        [
+            "hmmalign",
+            "--trim",
+            "--mapali",
+            str(mapali_file),
+            str(hmm_file),
+            str(sequences_file),
+        ],
+        stdout=open(output_file, "w"),
+        check=True,
+    )
+
+
+def _reorder_alignment_with_reference_first(
+    input_sto: Path,
+    output_sto: Path,
+    reference_id: str,
+) -> None:
+    """
+    Reorder alignment to place reference sequence first.
+
+    Args:
+        input_sto: Input Stockholm alignment file
+        output_sto: Output Stockholm alignment file
         reference_id: ID of the reference sequence to move to top
     """
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_sto = Path(temp_dir) / "temp_alignment.sto"
+    aln = AlignIO.read(input_sto, "stockholm")
 
-        subprocess.run(
-            [
-                "hmmalign",
-                "--trim",
-                "--mapali",
-                str(mapali_file),
-                str(hmm_file),
-                str(sequences_file),
-            ],
-            stdout=open(temp_sto, "w"),
-            check=True,
-        )
+    # Find reference sequence and move it to front
+    reference_record = None
+    other_records = []
 
-        aln = AlignIO.read(temp_sto, "stockholm")
+    for record in aln:
+        if reference_id in record.id:
+            reference_record = record
+        else:
+            other_records.append(record)
 
-        # Find reference sequence and move it to front
-        reference_record = None
-        other_records = []
+    if reference_record is None:
+        raise ValueError(f"Reference sequence '{reference_id}' not found in alignment")
 
-        for record in aln:
-            if reference_id in record.id:
-                reference_record = record
-            else:
-                other_records.append(record)
+    reordered_aln = MultipleSeqAlignment([reference_record] + other_records)
+    with open(output_sto, "w") as handle:
+        AlignIO.write(reordered_aln, handle, "stockholm")
 
-        if reference_record is None:
-            raise ValueError(f"Reference sequence '{reference_id}' not found in alignment")
 
-        reordered_aln = MultipleSeqAlignment([reference_record] + other_records)
-        with open(output_file, "w") as handle:
-            AlignIO.write(reordered_aln, handle, "stockholm")
+def _convert_alignment_formats(
+    sto_file: Path,
+    output_dir: Path,
+) -> tuple[Path, Path, Path]:
+    """
+    Convert STO alignment to A3M, FASTA, and unaligned FASTA formats.
+
+    Args:
+        sto_file: Source Stockholm alignment file
+
+    Returns:
+        Tuple of (a3m_file, fasta_file, unaligned_fasta_file) paths
+    """
+    a3m_file = sto_file.with_suffix(".a3m")
+    _get_or_compute(
+        a3m_file,
+        output_dir,
+        lambda: reformat_alignment(sto_file, a3m_file, "sto", "a3m"),
+    )
+
+    fasta_file = sto_file.with_suffix(".fasta")
+    _get_or_compute(
+        fasta_file,
+        output_dir,
+        lambda: reformat_alignment(sto_file, fasta_file, "sto", "fas"),
+    )
+
+    unaligned_fasta_file = sto_file.with_suffix(".unaligned.fasta")
+    _get_or_compute(
+        unaligned_fasta_file,
+        output_dir,
+        lambda: unalign_fasta(fasta_file, unaligned_fasta_file),
+    )
+
+    return a3m_file, fasta_file, unaligned_fasta_file
 
 
 def _filter_sto(source: Path, output: Path, keep_if_in: list[Path]) -> None:
@@ -369,6 +431,41 @@ def _apply_hhfilter_strategy(input_a3m: Path, output_a3m: Path, target_size: int
                             f_out.write(lines[i + 1])
 
         print(f"Final MSA has {min(n_seqs, target_size)} sequences")
+
+
+def _calculate_membership(
+    alignment_path: Path,
+    query_mapping: dict[str, str],
+    source_alignment_paths: dict[str, Path],
+    output_path: Path,
+) -> None:
+    subfamilies = tuple(source_alignment_paths.keys())
+
+    aln = AlignIO.read(alignment_path, "stockholm")
+
+    members = {}
+    for subfamily, source_path in source_alignment_paths.items():
+        ids = [record.id.split("/")[0] for record in AlignIO.read(source_path, "stockholm")]
+        members[subfamily] = set(ids)
+
+    membership = {}
+    for record in aln:
+        for subfamily in subfamilies:
+            if record.id.split("/")[0] in members[subfamily]:
+                membership[record.id] = subfamily
+                break
+        else:
+            print(record.id)
+
+    membership.update(query_mapping)
+
+    (
+        pd.Series(membership)
+        .to_frame()
+        .reset_index()
+        .rename(columns={"index": "record_id", 0: "subfamily"})
+        .to_csv(output_path, sep="\t", index=False)
+    )
 
 
 if __name__ == "__main__":
