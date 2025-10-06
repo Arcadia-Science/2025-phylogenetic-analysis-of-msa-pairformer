@@ -1,7 +1,6 @@
 from pathlib import Path
 
 import arcadia_pycolor as apc
-import ipywidgets as widgets
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
@@ -121,204 +120,44 @@ def tree_style_with_scalar_annotation(
 
 
 def interactive_layer_weight_plot(df: pd.DataFrame, num_layers: int = 22) -> go.Figure:
-    """Create interactive plotly figure with dropdown to select layer weights"""
+    """Create interactive plotly figure with dropdown to select layer weights."""
 
-    categories = df["query"].unique()
+    queries = df["query"].unique()
     subfamilies = df["subfamily"].unique()
     colors = [color.hex_code for color in apc.palettes.primary.colors[: len(subfamilies)]]
     subfamily_colors = {subfamily: colors[i] for i, subfamily in enumerate(subfamilies)}
 
-    # Create subplot with 3 columns for the 3 queries
     fig = make_subplots(
         rows=1,
         cols=3,
-        subplot_titles=[f"Query: {cat}" for cat in categories],
+        subplot_titles=[
+            f"{query} (subfamily {subfamily})"
+            for query, subfamily in zip(queries, subfamilies, strict=False)
+        ],
         horizontal_spacing=0.08,
         shared_xaxes=True,
         shared_yaxes=True,
-        x_title="Patristic Distance",
-        y_title="Weight",
+        x_title="Tree distance (patristic)",
+        y_title="Sequence weight",
+        specs=[[{"type": "xy"}, {"type": "xy"}, {"type": "xy"}]],
     )
 
-    # Create traces for each layer
-    traces_by_layer = {}
+    num_traces_per_option = len(queries) * len(subfamilies)
 
-    for layer_idx in range(num_layers):
-        weight_col = f"layer_{layer_idx}_weight"
-        layer_traces = []
-
-        for i, category in enumerate(categories):
-            category_data = df[df["query"] == category]
-
-            for subfamily in subfamilies:
-                subfamily_data = category_data[category_data["subfamily"] == subfamily]
-                if not subfamily_data.empty:
-                    trace = go.Scatter(
-                        x=subfamily_data["patristic_distance"],
-                        y=subfamily_data[weight_col],
-                        mode="markers",
-                        marker=dict(color=subfamily_colors[subfamily], size=8, opacity=0.6),
-                        name=f"{subfamily}",
-                        legendgroup=subfamily,
-                        showlegend=(i == 0),  # Only show legend for first subplot
-                        visible=False,  # Initially hide all layer traces
-                    )
-                    layer_traces.append((trace, i + 1))  # Store trace and column index
-
-        traces_by_layer[layer_idx] = layer_traces
-
-    # Add all traces to the figure
-    for layer_traces in traces_by_layer.values():
-        for trace, col_idx in layer_traces:
-            fig.add_trace(trace, row=1, col=col_idx)
-
-    # Create dropdown menu
-    dropdown_buttons = []
-    for layer_idx in range(num_layers):
-        # Create visibility array - True for traces of this layer, False for others
-        visibility = []
-        showlegend = []
-        for layer_idx in range(num_layers):
-            if layer_idx == layer_idx:
-                visibility.extend([True] * len(traces_by_layer[layer_idx]))
-                # Show legend only for first subplot traces of the selected layer
-                for _, (_, col_idx) in enumerate(traces_by_layer[layer_idx]):
-                    showlegend.append(col_idx == 1)  # Only first column shows legend
-            else:
-                visibility.extend([False] * len(traces_by_layer[layer_idx]))
-                showlegend.extend([False] * len(traces_by_layer[layer_idx]))
-
-        dropdown_buttons.append(
-            dict(
-                label=f"Layer {layer_idx}",
-                method="update",
-                args=[{"visible": visibility, "showlegend": showlegend}],
-            )
-        )
-
-    # Add median weight option
-    median_traces = []
-    for i, category in enumerate(categories):
-        category_data = df[df["query"] == category]
-
-        for subfamily in subfamilies:
-            subfamily_data = category_data[category_data["subfamily"] == subfamily]
-            if not subfamily_data.empty:
-                trace = go.Scatter(
-                    x=subfamily_data["patristic_distance"],
-                    y=subfamily_data["median_weight"],
-                    mode="markers",
-                    marker=dict(color=subfamily_colors[subfamily], size=8, opacity=0.6),
-                    name=f"{subfamily}",
-                    legendgroup=subfamily,
-                    showlegend=(i == 0),
-                    visible=True,  # Show median traces by default
-                )
-                median_traces.append((trace, i + 1))
-
-    # Add median traces
-    for trace, col_idx in median_traces:
-        fig.add_trace(trace, row=1, col=col_idx)
-
-    # Add median option to dropdown (put it first since it's default)
-    median_visibility = [False] * len(
-        [t for traces in traces_by_layer.values() for t in traces]
-    ) + [True] * len(median_traces)
-    median_showlegend = [False] * len(
-        [t for traces in traces_by_layer.values() for t in traces]
-    ) + [trace[1] == 1 for trace in median_traces]  # Only first column shows legend
-    dropdown_buttons.insert(
-        0,
-        dict(
-            label="Median Weight",
-            method="update",
-            args=[{"visible": median_visibility, "showlegend": median_showlegend}],
-        ),
-    )
-
-    # Update layout
-    fig.update_layout(
-        title=dict(
-            text="Patristic Distance vs Layer Weights (Interactive)", x=0.5, xanchor="center"
-        ),
-        updatemenus=[
-            dict(
-                buttons=dropdown_buttons,
-                direction="down",
-                showactive=True,
-                x=-0.1,
-                xanchor="left",
-                y=1.05,
-                yanchor="bottom",
-                pad=dict(t=0, b=0, l=2, r=2),
-                bgcolor="rgba(255,255,255,0.95)",
-                bordercolor="rgba(0,0,0,0.2)",
-                borderwidth=1,
-                font=dict(size=10),
-            )
-        ],
-        width=800,
-        height=450,
-        showlegend=True,
-        legend=dict(orientation="h", x=0.5, xanchor="center", y=-0.15, yanchor="top"),
-    )
-
-    # Remove individual axis labels since we have shared titles
-    # The shared axis titles are set in make_subplots
-
-    return fig
-
-
-def interactive_layer_weight_plot_widget(df: pd.DataFrame, num_layers: int = 22):
-    """Create interactive plotly figure with ipywidgets dropdown for layer selection
-
-    Returns a VBox widget that contains both the dropdown and plot, suitable for Quarto rendering.
-    """
-
-    # Create dropdown widget
-    layer_options = ["Median Weight"] + [f"Layer {i}" for i in range(num_layers)]
-    layer_dropdown = widgets.Dropdown(
-        options=layer_options,
-        value="Median Weight",
-        description="Select Layer:",
-        style={"description_width": "100px"},
-        layout={"width": "200px"},
-    )
-
-    categories = df["query"].unique()
-    subfamilies = df["subfamily"].unique()
-    colors = [color.hex_code for color in apc.palettes.primary.colors[: len(subfamilies)]]
-    subfamily_colors = {subfamily: colors[i] for i, subfamily in enumerate(subfamilies)}
-
-    # Create output widget to hold the plot
-    output = widgets.Output()
-
-    def create_and_show_plot(selected_layer):
-        """Create and display plot for the selected layer"""
-        fig = make_subplots(
-            rows=1,
-            cols=3,
-            subplot_titles=[f"Query: {cat}" for cat in categories],
-            horizontal_spacing=0.08,
-            shared_xaxes=True,
-            shared_yaxes=True,
-            x_title="Patristic Distance",
-            y_title="Weight",
-        )
-
-        # Determine which column to use
-        if selected_layer == "Median Weight":
+    for option_idx in range(num_layers + 1):
+        if option_idx == 0:
             weight_col = "median_weight"
+            visible = True
         else:
-            layer_num = int(selected_layer.split()[-1])
-            weight_col = f"layer_{layer_num}_weight"
+            weight_col = f"layer_{option_idx - 1}_weight"
+            visible = False
 
-        # Add traces for each query and subfamily
-        for i, category in enumerate(categories):
-            category_data = df[df["query"] == category]
+        for query_idx, query in enumerate(queries):
+            query_data = df[df["query"] == query]
 
             for subfamily in subfamilies:
-                subfamily_data = category_data[category_data["subfamily"] == subfamily]
+                subfamily_data = query_data[query_data["subfamily"] == subfamily]
+
                 if not subfamily_data.empty:
                     fig.add_trace(
                         go.Scatter(
@@ -326,39 +165,85 @@ def interactive_layer_weight_plot_widget(df: pd.DataFrame, num_layers: int = 22)
                             y=subfamily_data[weight_col],
                             mode="markers",
                             marker=dict(color=subfamily_colors[subfamily], size=8, opacity=0.6),
-                            name=f"{subfamily}",
+                            name=subfamily,
                             legendgroup=subfamily,
-                            showlegend=(i == 0),  # Only show legend for first subplot
+                            showlegend=(query_idx == 0),
+                            visible=visible,
+                            customdata=list(
+                                zip(
+                                    subfamily_data["target"],
+                                    [subfamily] * len(subfamily_data),
+                                    strict=False,
+                                )
+                            ),
+                            hovertemplate=(
+                                "Target: %{customdata[0]}<br>Subfamily: %{customdata[1]}"
+                                "<extra></extra>"
+                            ),
+                            # textfont=dict(
+                            #    family="Suisse Int'l",
+                            #    size=13,
+                            # ),
                         ),
                         row=1,
-                        col=i + 1,
+                        col=query_idx + 1,
                     )
 
-        fig.update_layout(
-            title=dict(text=f"Patristic Distance vs {selected_layer}", x=0.5, xanchor="center"),
-            width=800,
-            height=450,
-            showlegend=True,
-            legend=dict(orientation="h", x=0.5, xanchor="center", y=-0.15, yanchor="top"),
+    buttons = []
+    for option_idx in range(num_layers + 1):
+        visibility = [False] * ((num_layers + 1) * num_traces_per_option)
+
+        start_idx = option_idx * num_traces_per_option
+        end_idx = start_idx + num_traces_per_option
+        for i in range(start_idx, end_idx):
+            visibility[i] = True
+
+        if option_idx == 0:
+            label = "Median Weight"
+        else:
+            label = f"Layer {option_idx - 1}"
+
+        buttons.append(
+            dict(
+                label=label,
+                method="update",
+                args=[{"visible": visibility}],
+            )
         )
 
-        # Clear output and show new plot
-        with output:
-            output.clear_output(wait=True)
-            fig.show()
+    fig.update_layout(
+        updatemenus=[
+            dict(
+                buttons=buttons,
+                direction="down",
+                showactive=True,
+                x=-0.15,
+                xanchor="left",
+                y=1.05,
+                yanchor="bottom",
+                pad=dict(t=0, b=0, l=2, r=2),
+                bgcolor="rgba(255,255,255,0.95)",
+                bordercolor="rgba(0,0,0,0.2)",
+                borderwidth=1,
+                font=dict(size=12),
+            )
+        ],
+        width=800,
+        height=400,
+        showlegend=True,
+        legend=dict(orientation="h", x=0.5, xanchor="center", y=-0.20, yanchor="top"),
+    )
 
-    def update_plot(change):
-        """Update plot when dropdown selection changes"""
-        selected = change["new"]
-        create_and_show_plot(selected)
+    x_min = df["patristic_distance"].min()
+    x_max = df["patristic_distance"].max()
+    fig.update_xaxes(range=[x_min, x_max], matches="x")
 
-    layer_dropdown.observe(update_plot, names="value")
+    apc.plotly.style_plot(fig, monospaced_axes="all", row=1, col=1)
+    apc.plotly.style_plot(fig, monospaced_axes="all", row=1, col=2)
+    apc.plotly.style_plot(fig, monospaced_axes="all", row=1, col=3)
+    # apc.plotly.style_legend(fig)
 
-    # Show initial plot
-    create_and_show_plot("Median Weight")
-
-    # Return a VBox containing both widgets for Quarto compatibility
-    return widgets.VBox([layer_dropdown, output])
+    return fig
 
 
 if __name__ == "__main__":
