@@ -200,14 +200,23 @@ def interactive_layer_weight_plot(df: pd.DataFrame, num_layers: int = 22) -> go.
 
         if option_idx == 0:
             label = "Median Weight"
+            weight_col = "median_weight"
         else:
             label = f"Layer {option_idx - 1}"
+            weight_col = f"layer_{option_idx - 1}_weight"
+
+        y_min = df[weight_col].min()
+        y_max = df[weight_col].max()
+        y_range = [y_min * 0.95, y_max * 1.05]
 
         buttons.append(
             dict(
                 label=label,
                 method="update",
-                args=[{"visible": visibility}],
+                args=[
+                    {"visible": visibility},
+                    {"yaxis.range": y_range, "yaxis2.range": y_range, "yaxis3.range": y_range},
+                ],
             )
         )
 
@@ -238,7 +247,11 @@ def interactive_layer_weight_plot(df: pd.DataFrame, num_layers: int = 22) -> go.
     x_max = df["patristic_distance"].max()
     x_diff = x_max - x_min
     fig.update_xaxes(range=[x_min - 0.02 * x_diff, x_max + 0.02 * x_diff], matches="x")
-    fig.update_yaxes(rangemode="tozero")
+
+    median_y_min = df["median_weight"].min()
+    median_y_max = df["median_weight"].max()
+    median_y_range = [median_y_min * 0.95, median_y_max * 1.05]
+    fig.update_yaxes(range=median_y_range)
 
     apc.plotly.style_plot(fig, monospaced_axes="all", row=1, col=1)
     apc.plotly.style_plot(fig, monospaced_axes="all", row=1, col=2)
