@@ -1,44 +1,53 @@
+import random
 import subprocess
 from pathlib import Path
 
-import networkx as nx
 import pandas as pd
 import typer
-from Bio import Phylo
-from Bio.Phylo.Newick import Tree
+from ete3 import Tree
 
 app = typer.Typer(pretty_exceptions_enable=False)
 
 
-def read_newick(path: Path) -> Tree:
-    return Phylo.read(path, "newick")  # type: ignore
+def read_newick(path: str | Path) -> Tree:
+    return Tree(str(path), format=1)
 
 
 def get_patristic_distance(tree: Tree, reference: str) -> pd.Series:
-    nx_tree = Phylo.to_networkx(tree)  # type: ignore
+    for leaf in tree.get_leaves():
+        if reference in leaf.name:
+            reference_node = leaf
+            break
+    else:
+        raise ValueError(f"Reference '{reference}' not found in tree leaves")
 
-    reference_leaf = None
+    return pd.Series({leaf.name: reference_node.get_distance(leaf) for leaf in tree.get_leaves()})
 
-    leaves = []
-    for node in nx_tree.nodes():
-        if nx_tree.degree(node) == 1:
-            leaves.append(node)
 
-            if node.name == reference:
-                reference_leaf = node
+def subset_tree(tree: Tree, n: int, force_include: list[str] | None = None, seed=42) -> Tree:
+    random.seed(seed)
 
-    assert reference_leaf is not None
+    if force_include is None:
+        force_include = []
 
-    distances = {}
-    for leaf in leaves:
-        distances[leaf.name] = nx.shortest_path_length(
-            nx_tree,
-            reference_leaf,
-            leaf,
-            weight="weight",
-        )
+    all_leaves = [leaf.name for leaf in tree.get_leaves()]
 
-    return pd.Series(distances)
+    if n > len(all_leaves):
+        n = len(all_leaves)
+
+    available_leaves = [leaf for leaf in all_leaves if leaf not in force_include]
+    n_random = n - len(force_include)
+
+    if n_random < 0:
+        selected_leaves = force_include[:n]
+    else:
+        random_leaves = random.sample(available_leaves, min(n_random, len(available_leaves)))
+        selected_leaves = force_include + random_leaves
+
+    subset_tree = tree.copy()
+    subset_tree.prune(selected_leaves)
+
+    return subset_tree
 
 
 @app.command()
