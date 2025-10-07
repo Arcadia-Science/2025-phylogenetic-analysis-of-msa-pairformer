@@ -137,7 +137,7 @@ def interactive_layer_weight_plot(
         cols=3,
         subplot_titles=[
             (
-                f'{query} (subfamily <span style="color:"'
+                f'{query} (subfamily <span style="color:'
                 f'{subfamily_colors[query_to_subfamily[query]]}">'
                 f"{query_to_subfamily[query]}</span>)"
             )
@@ -176,7 +176,7 @@ def interactive_layer_weight_plot(
                             x=subfamily_data["patristic_distance"],
                             y=subfamily_data[weight_col],
                             mode="markers",
-                            marker=dict(color=subfamily_colors[subfamily], size=8, opacity=0.6),
+                            marker=dict(color=subfamily_colors[subfamily], size=5, opacity=0.45),
                             name=subfamily,
                             legendgroup=subfamily,
                             showlegend=(query_idx == 0),
