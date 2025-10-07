@@ -119,7 +119,12 @@ def tree_style_with_scalar_annotation(
     return tree_style
 
 
-def interactive_layer_weight_plot(df: pd.DataFrame, num_layers: int = 22) -> go.Figure:
+def interactive_layer_weight_plot(
+    df: pd.DataFrame,
+    regression_df: pd.DataFrame,
+    query_to_subfamily: dict[str, str],
+    num_layers: int = 22,
+) -> go.Figure:
     """Create interactive plotly figure with dropdown to select layer weights."""
 
     queries = df["query"].unique()
@@ -131,8 +136,12 @@ def interactive_layer_weight_plot(df: pd.DataFrame, num_layers: int = 22) -> go.
         rows=1,
         cols=3,
         subplot_titles=[
-            f"{query} (subfamily {subfamily})"
-            for query, subfamily in zip(queries, subfamilies, strict=False)
+            (
+                f'{query} (subfamily <span style="color:"'
+                f'{subfamily_colors[query_to_subfamily[query]]}">'
+                f"{query_to_subfamily[query]}</span>)"
+            )
+            for query in queries
         ],
         horizontal_spacing=0.08,
         shared_xaxes=True,
@@ -142,14 +151,17 @@ def interactive_layer_weight_plot(df: pd.DataFrame, num_layers: int = 22) -> go.
         specs=[[{"type": "xy"}, {"type": "xy"}, {"type": "xy"}]],
     )
 
-    num_traces_per_option = len(queries) * len(subfamilies)
+    traces_per_query = len(subfamilies) + 1
+    num_traces_per_option = len(queries) * traces_per_query
 
     for option_idx in range(num_layers + 1):
         if option_idx == 0:
             weight_col = "median_weight"
+            layer_label = "median"
             visible = True
         else:
             weight_col = f"layer_{option_idx - 1}_weight"
+            layer_label = option_idx - 1
             visible = False
 
         for query_idx, query in enumerate(queries):
@@ -180,14 +192,45 @@ def interactive_layer_weight_plot(df: pd.DataFrame, num_layers: int = 22) -> go.
                                 "Target: %{customdata[0]}<br>Subfamily: %{customdata[1]}"
                                 "<extra></extra>"
                             ),
-                            # textfont=dict(
-                            #    family="Suisse Int'l",
-                            #    size=13,
-                            # ),
                         ),
                         row=1,
                         col=query_idx + 1,
                     )
+
+            reg_row = regression_df[
+                (regression_df["query"] == query) & (regression_df["layer"] == layer_label)
+            ]
+            slope = reg_row["slope"].iloc[0]
+            intercept = reg_row["intercept"].iloc[0]
+            r_squared = reg_row["r_squared"].iloc[0]
+            p_value = reg_row["p_value"].iloc[0]
+
+            x_min = query_data["patristic_distance"].min()
+            x_max = query_data["patristic_distance"].max()
+            x_line = [x_min + i * (x_max - x_min) / 100 for i in range(101)]
+            y_line = [slope * x + intercept for x in x_line]
+
+            fig.add_trace(
+                go.Scatter(
+                    x=x_line,
+                    y=y_line,
+                    mode="lines",
+                    line=dict(color="#555555", width=1.5),
+                    name="Regression",
+                    showlegend=False,
+                    visible=visible,
+                    customdata=[[r_squared, p_value, slope, intercept]] * 101,
+                    hovertemplate=(
+                        "R²: %{customdata[0]:.3f}<br>"
+                        "p: %{customdata[1]:.3e}<br>"
+                        "slope: %{customdata[2]:.3f}<br>"
+                        "intercept: %{customdata[3]:.3f}"
+                        "<extra></extra>"
+                    ),
+                ),
+                row=1,
+                col=query_idx + 1,
+            )
 
     buttons = []
     for option_idx in range(num_layers + 1):
@@ -207,7 +250,7 @@ def interactive_layer_weight_plot(df: pd.DataFrame, num_layers: int = 22) -> go.
 
         y_min = df[weight_col].min()
         y_max = df[weight_col].max()
-        y_range = [y_min * 0.95, y_max * 1.05]
+        y_range = [y_min * 0.90, y_max * 1.1]
 
         buttons.append(
             dict(
@@ -226,10 +269,10 @@ def interactive_layer_weight_plot(df: pd.DataFrame, num_layers: int = 22) -> go.
                 buttons=buttons,
                 direction="down",
                 showactive=True,
-                x=-0.15,
+                x=0.0,
                 xanchor="left",
-                y=1.05,
-                yanchor="bottom",
+                y=1.2,
+                yanchor="middle",
                 pad=dict(t=0, b=0, l=2, r=2),
                 bgcolor="rgba(255,255,255,0.95)",
                 bordercolor="rgba(0,0,0,0.2)",
@@ -240,23 +283,29 @@ def interactive_layer_weight_plot(df: pd.DataFrame, num_layers: int = 22) -> go.
         width=800,
         height=400,
         showlegend=True,
-        legend=dict(orientation="h", x=0.5, xanchor="center", y=-0.20, yanchor="top"),
+        legend=dict(
+            orientation="h",
+            x=0.5,
+            xanchor="center",
+            y=1.20,
+            yanchor="middle",
+        ),
     )
 
     x_min = df["patristic_distance"].min()
     x_max = df["patristic_distance"].max()
     x_diff = x_max - x_min
-    fig.update_xaxes(range=[x_min - 0.02 * x_diff, x_max + 0.02 * x_diff], matches="x")
+    fig.update_xaxes(range=[x_min - 0.05 * x_diff, x_max + 0.05 * x_diff], matches="x")
 
     median_y_min = df["median_weight"].min()
     median_y_max = df["median_weight"].max()
-    median_y_range = [median_y_min * 0.95, median_y_max * 1.05]
+    median_y_diff = median_y_max - median_y_min
+    median_y_range = [median_y_min - 0.05 * median_y_diff, median_y_max + 0.05 * median_y_diff]
     fig.update_yaxes(range=median_y_range)
 
     apc.plotly.style_plot(fig, monospaced_axes="all", row=1, col=1)
     apc.plotly.style_plot(fig, monospaced_axes="all", row=1, col=2)
     apc.plotly.style_plot(fig, monospaced_axes="all", row=1, col=3)
-    # apc.plotly.style_legend(fig)
 
     return fig
 
