@@ -1,12 +1,10 @@
+import asyncio
 import random
 import subprocess
 from pathlib import Path
 
 import pandas as pd
-import typer
 from ete3 import Tree
-
-app = typer.Typer(pretty_exceptions_enable=False)
 
 
 def read_newick(path: str | Path) -> Tree:
@@ -50,11 +48,26 @@ def subset_tree(tree: Tree, n: int, force_include: list[str] | None = None, seed
     return subset_tree
 
 
-@app.command()
-def run_fasttree(alignment_file: Path, output_file: Path) -> None:
+def run_fasttree(alignment_file: Path, output_file: Path, quiet: bool = False) -> None:
+    stderr = subprocess.DEVNULL if quiet else None
     with open(output_file, "w") as f:
-        subprocess.run(["FastTree", str(alignment_file)], stdout=f, check=True)
+        subprocess.run(["FastTree", str(alignment_file)], stdout=f, stderr=stderr, check=True)
 
 
-if __name__ == "__main__":
-    app()
+async def run_fasttree_async(
+    alignment_file: Path,
+    output_file: Path,
+    log_file: Path,
+    semaphore: asyncio.Semaphore,
+) -> None:
+    """Runs FastTree using asyncio's non-blocking subprocess tools."""
+    async with semaphore:
+        with open(output_file, "w") as output_pointer, open(log_file, "w") as log_pointer:
+            process = await asyncio.create_subprocess_exec(
+                "FastTree",
+                str(alignment_file),
+                stdout=output_pointer,
+                stderr=log_pointer,
+            )
+
+            await process.wait()
