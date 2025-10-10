@@ -57,7 +57,10 @@ def write_fasta_like(seqs: Sequence[str], deflines: Sequence[str], output: Path)
 
 
 def write_filtered_msa(
-    msa: MSA, output: Path, format: Literal["fasta", "a3m", "unaligned_fasta"]
+    msa: MSA,
+    output: Path,
+    format: Literal["fasta", "a3m", "unaligned_fasta"],
+    simplify_ids: bool = False,
 ) -> None:
     """Write an MSA processed by MSA Pairformer to file.
 
@@ -65,6 +68,12 @@ def write_filtered_msa(
     in the raw MSAs in the OpenProteinSet, and it is this filtered MSA we're interested
     in performing downstream calculations on, like calculating a tree. No function in
     the MSA_Pairformer codebase exists for this.
+
+    Args:
+        simplify_ids:
+            If True, will convert deflines following the OpenProteinSet convention
+            (e.g., `tr|A0A0N5AJP5|A0A0N5AJP5_9BILA`) to a simplified form (e.g.,
+            `A0A0N5AJP5`)
     """
 
     # We keep all insertions, since these are meaningful for tree-building and other
@@ -79,7 +88,11 @@ def write_filtered_msa(
     filtered_ids = []
     for idx in msa.select_diverse_indices:
         filtered_seqs.append(unfiltered_seqs[idx])
-        filtered_ids.append(unfiltered_ids[idx])
+
+        if simplify_ids:
+            filtered_ids.append(unfiltered_ids[idx].split("|")[1])
+        else:
+            filtered_ids.append(unfiltered_ids[idx])
 
     with tempfile.TemporaryDirectory() as tmpdir:
         tmpdir = Path(tmpdir)

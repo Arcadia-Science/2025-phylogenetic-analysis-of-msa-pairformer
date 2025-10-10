@@ -77,21 +77,15 @@ def calculate_sequence_weights(msas: dict[str, MSA]) -> dict[str, torch.Tensor]:
     `USE_MODAL=0` or is unset, and will execute remotely on Modal if `USE_MODAL=1`
     (requires modal credentials).
 
-    Unlike `run_inference`, this function is designed for processing many MSAs
-    because it only extracts and returns sequence weights (a small amount of data per
-    MSA) rather than full model outputs. This is scalable because:
-
-        (1) The model is instantiated once and reused across all MSAs in the batch,
-            amortizing the cost of model loading/transfer.
-        (2) Sequence weights are compact compared to full embeddings/attention maps, so
-            serialization overhead when transferring results from remote to local is
-            manageable even for many MSAs.
-
-    Currently, each forward pass contains a single MSA. Performance could be optimized
-    by batching.
+    This function is designed for processing many MSAs for the narrow use case of
+    extracting and returning sequence weights (a small amount of data per MSA) rather
+    than full model outputs.
 
     The function is implemented to provide a consistent interface regardless of the
     execution environment (Modal or local).
+
+    Currently, each forward pass contains a single MSA. Performance could be optimized
+    by batching.
 
     Args:
         msas: Dictionary mapping MSA identifiers to MSA objects
@@ -106,7 +100,6 @@ def calculate_sequence_weights(msas: dict[str, MSA]) -> dict[str, torch.Tensor]:
     seq_weights_dict = {}
     with torch.no_grad(), autocast(dtype=torch.bfloat16, device_type=device):
         for msa_id, msa in msas.items():
-            print(msa_id)
             model_output = model(
                 return_seq_weights=True,
                 query_only=True,

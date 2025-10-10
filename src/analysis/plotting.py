@@ -1,10 +1,9 @@
-from pathlib import Path
-
 import arcadia_pycolor as apc
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 from arcadia_pycolor.gradient import Gradient
+from arcadia_pycolor.style_defaults import DEFAULT_FONT
 from ete3 import NodeStyle, TextFace, TreeStyle
 from plotly.subplots import make_subplots
 
@@ -30,23 +29,23 @@ def tree_style_with_categorical_annotation(
             is_highlighted = highlight and any(key in node.name for key in highlight)
 
             if is_highlighted:
-                node_style["shape"] = "sphere"
+                node_style["shape"] = "circle"
                 node_style["size"] = 15
 
                 matched_key = next((key for key in highlight if key in node.name), None)
                 if matched_key:
-                    text_face = TextFace(matched_key, fsize=32, bold=False)
+                    text_face = TextFace(matched_key, fsize=32, bold=False, ftype=DEFAULT_FONT)
                     node.add_face(text_face, column=0, position="branch-right")
             else:
-                node_style["shape"] = "sphere"
+                node_style["shape"] = "circle"
                 node_style["size"] = 15
 
             for key, category in categories.items():
                 if key in node.name:
-                    node_style["fgcolor"] = color_map.get(category, "#CCCCCC")
+                    node_style["fgcolor"] = color_map.get(category, "#000000")
                     break
             else:
-                node_style["fgcolor"] = "#CCCCCC"
+                node_style["fgcolor"] = "#000000"
 
             node.set_style(node_style)
 
@@ -88,24 +87,24 @@ def tree_style_with_scalar_annotation(
             is_highlighted = highlight and any(key in node.name for key in highlight)
 
             if is_highlighted:
-                node_style["shape"] = "sphere"
+                node_style["shape"] = "circle"
                 node_style["size"] = 15
 
                 matched_key = next((key for key in highlight if key in node.name), None)
                 if matched_key:
-                    text_face = TextFace(matched_key, fsize=32, bold=False)
+                    text_face = TextFace(matched_key, fsize=32, bold=False, ftype="Arial")
                     node.add_face(text_face, column=0, position="branch-right")
             else:
-                node_style["shape"] = "sphere"
+                node_style["shape"] = "circle"
                 node_style["size"] = 15
 
             # Find matching key and set color based on scalar value
             for key in values.keys():
                 if key in node.name:
-                    node_style["fgcolor"] = color_mapping.get(key, "#CCCCCC")
+                    node_style["fgcolor"] = color_mapping.get(key, "#000000")
                     break
             else:
-                node_style["fgcolor"] = "#CCCCCC"
+                node_style["fgcolor"] = "#000000"
 
             node.set_style(node_style)
 
@@ -308,21 +307,3 @@ def interactive_layer_weight_plot(
     apc.plotly.style_plot(fig, monospaced_axes="all", row=1, col=3)
 
     return fig
-
-
-if __name__ == "__main__":
-    import pandas as pd
-
-    from analysis.tree import read_newick, subset_tree
-
-    tree = read_newick("data/response_regulators/PF00072.final.fasttree.newick")
-    tree = subset_tree(tree, 200, force_include=["1NXS", "4CBV", "4E7P"])
-    membership_path = "data/response_regulators/membership.txt"
-    categories = (
-        pd.read_csv(membership_path, sep="\t").set_index("record_id")["subfamily"].to_dict()
-    )
-
-    tree_style = tree_style_with_categorical_annotation(
-        tree, categories, ["1NXS", "4CBV", "4E7P"], Path("tree_plot.png")
-    )
-    tree.render("tree_plot.png", tree_style=tree_style)
