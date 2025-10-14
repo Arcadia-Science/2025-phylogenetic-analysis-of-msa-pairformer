@@ -4,12 +4,13 @@ import torch
 from torch.amp.autocast_mode import autocast
 
 from analysis.data import get_model_input_data, get_sequence_weight_data, to_cpu_dict
-from analysis.modal_infrastructure import image, modal_run_settings, volume
+from analysis.modal_infrastructure import image, runnable_on_modal, volume
+from analysis.utils import progress
 from MSA_Pairformer.dataset import MSA
 from MSA_Pairformer.model import MSAPairformer
 
 
-@modal_run_settings(
+@runnable_on_modal(
     app_name="msa-pairformer-inference",
     base_image=image,
     volumes={"/data": volume},
@@ -63,11 +64,12 @@ def run_inference(
         )
 
 
-@modal_run_settings(
+@runnable_on_modal(
     app_name="msa-pairformer-sequence-weights",
     base_image=image,
     volumes={"/data": volume},
-    timeout=3600,
+    timeout=36000,
+    enable_output=False,
     gpu="H100",
 )
 def calculate_sequence_weights(msas: dict[str, MSA]) -> dict[str, torch.Tensor]:
@@ -81,7 +83,7 @@ def calculate_sequence_weights(msas: dict[str, MSA]) -> dict[str, torch.Tensor]:
     extracting and returning sequence weights (a small amount of data per MSA) rather
     than full model outputs.
 
-    The function is implemented to provide a consistent interface regardless of the
+    Implemented to provide a consistent interface regardless of the
     execution environment (Modal or local).
 
     Currently, each forward pass contains a single MSA. Performance could be optimized
@@ -99,7 +101,7 @@ def calculate_sequence_weights(msas: dict[str, MSA]) -> dict[str, torch.Tensor]:
 
     seq_weights_dict = {}
     with torch.no_grad(), autocast(dtype=torch.bfloat16, device_type=device):
-        for msa_id, msa in msas.items():
+        for msa_id, msa in progress(msas.items(), desc="Running forward passes through the model"):
             model_output = model(
                 return_seq_weights=True,
                 query_only=True,

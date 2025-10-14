@@ -1,6 +1,7 @@
 import asyncio
 import random
 import subprocess
+import tempfile
 from pathlib import Path
 
 import pandas as pd
@@ -150,19 +151,35 @@ def run_fasttree(alignment_file: Path, output_file: Path, quiet: bool = False) -
 
 
 async def run_fasttree_async(
-    alignment_file: Path,
-    output_file: Path,
+    input_a3m: Path,
+    output_newick: Path,
     log_file: Path,
     semaphore: asyncio.Semaphore,
 ) -> None:
-    """Runs FastTree using asyncio's non-blocking subprocess tools."""
-    async with semaphore:
-        with open(output_file, "w") as output_pointer, open(log_file, "w") as log_pointer:
-            process = await asyncio.create_subprocess_exec(
-                "FastTree",
-                str(alignment_file),
-                stdout=output_pointer,
-                stderr=log_pointer,
-            )
+    """Runs FastTree asynchronously.
 
-            await process.wait()
+    Converts a3m to fasta in a temporary directory before running FastTree.
+    """
+    async with semaphore:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fasta_path = Path(tmpdir) / "aln.fasta"
+
+            reformat_process = await asyncio.create_subprocess_exec(
+                "reformat.pl",
+                "a3m",
+                "fas",
+                str(input_a3m),
+                str(fasta_path),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            await reformat_process.wait()
+
+            with open(output_newick, "w") as output_pointer, open(log_file, "w") as log_pointer:
+                fasttree_process = await asyncio.create_subprocess_exec(
+                    "FastTree",
+                    str(fasta_path),
+                    stdout=output_pointer,
+                    stderr=log_pointer,
+                )
+                await fasttree_process.wait()

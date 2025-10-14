@@ -1,3 +1,4 @@
+import contextlib
 import os
 import subprocess
 from collections.abc import Callable, Sequence
@@ -50,13 +51,14 @@ def use_modal() -> bool:
     return os.environ.get("USE_MODAL", "").strip().lower() in {"1", "true"}
 
 
-def modal_run_settings(
+def runnable_on_modal(
     *,
     app_name: str,
     base_image: modal.Image = BASE_IMAGE,
     local_dir: Path | str | None = None,
     auto_detect_files: bool = False,
     ignore_pattern: Sequence[str] | Callable[[Path], bool] = (),
+    enable_output: bool = True,
     **remote_fn_kwargs,
 ):
     """Conditionally run functions on Modal with some basic automatic file handling.
@@ -145,7 +147,8 @@ def modal_run_settings(
             new_args = tuple([_resolve_path_args(arg) for arg in args])
             new_kwargs = {k: _resolve_path_args(v) for k, v in kwargs.items()}
 
-            with modal.enable_output(), app.run():
+            output_context = modal.enable_output() if enable_output else contextlib.nullcontext()
+            with output_context, app.run():
                 return modal_func.remote(*new_args, **new_kwargs)
 
         return wrapper
@@ -153,7 +156,7 @@ def modal_run_settings(
     return decorator
 
 
-@modal_run_settings(app_name="test-app", gpu="T4")
+@runnable_on_modal(app_name="test-app", gpu="T4")
 def _some_function():
     print("Running on:")
     subprocess.run(["uname", "-n"])

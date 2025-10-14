@@ -7,6 +7,8 @@ from botocore import UNSIGNED
 from botocore.client import BaseClient
 from botocore.config import Config
 
+from analysis.utils import progress
+
 
 def get_s3_client() -> BaseClient:
     """Create an S3 client configured for unsigned requests."""
@@ -34,7 +36,7 @@ def fetch_msa(id: str, db_dir: Path, s3_client: BaseClient) -> Path:
 
 def fetch_msas(ids: Sequence[str], db_dir: Path) -> dict[str, Path]:
     fetch = partial(fetch_msa, db_dir=db_dir, s3_client=get_s3_client())
-    return {id: fetch(id) for id in ids}
+    return {id: fetch(id) for id in progress(ids, desc="Downloading or fetching MSAs")}
 
 
 def fetch_all_ids(cache_file: Path) -> list[str]:
@@ -46,13 +48,11 @@ def fetch_all_ids(cache_file: Path) -> list[str]:
     pages = paginator.paginate(Bucket="openfold", Prefix="uniclust30/")
 
     ids = []
-    for page_idx, page in enumerate(pages):
+    for page in pages:
         for obj in page.get("Contents", []):
             if obj["Key"].endswith("/a3m/uniclust30.a3m"):
                 id = obj["Key"].removeprefix("uniclust30/").removesuffix("/a3m/uniclust30.a3m")
                 ids.append(id)
-
-        print(page_idx)
 
     cache_file.write_text("\n".join(ids) + "\n")
 
