@@ -78,3 +78,9 @@ line-ending = "auto"
 [tool.ruff.lint.isort]
 order-by-type = true
 no-lines-before = ["future", "standard-library"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+filterwarnings = [
+  "ignore::DeprecationWarning",
+]

@@ -144,6 +144,53 @@ def sort_tree_by_reference(tree: Tree, reference: str) -> Tree:
     return sorted_tree
 
 
+def get_cherries(tree: Tree) -> list[tuple[str, str]]:
+    """Find all cherries in the tree.
+
+    A cherry is a pair of leaves that share an immediate common ancestor.
+
+    Args:
+        tree: The phylogenetic tree to analyze
+
+    Returns:
+        list[tuple[str, str]]: List of cherry pairs as tuples of leaf names
+    """
+    cherries = []
+    for node in tree.traverse():
+        if not node.is_leaf() and len(node.children) == 2:
+            child1, child2 = node.children
+            if child1.is_leaf() and child2.is_leaf():
+                cherries.append((child1.name, child2.name))
+    return cherries
+
+
+def cherry_count_statistic(tree: Tree) -> int:
+    return len(get_cherries(tree))
+
+
+def colless_statistic(tree: Tree) -> int:
+    stat = 0
+    for node in tree.traverse("postorder"):
+        if not node.is_leaf() and len(node.children) == 2:
+            left, right = node.children
+            left_tips = len(left.get_leaves())
+            right_tips = len(right.get_leaves())
+            stat += abs(left_tips - right_tips)
+    return stat
+
+
+def phylogenetic_diversity_statistic(tree: Tree) -> float:
+    total = 0.0
+    for node in tree.traverse():
+        if node.dist:
+            total += node.dist
+    return total
+
+
+def tree_size(tree: Tree) -> int:
+    return len(tree.get_leaves())
+
+
 def run_fasttree(alignment_file: Path, output_file: Path, quiet: bool = False) -> None:
     stderr = subprocess.DEVNULL if quiet else None
     with open(output_file, "w") as f:
