@@ -4,6 +4,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+import numpy as np
 import pandas as pd
 from ete3 import Tree
 
@@ -100,9 +101,15 @@ def subset_tree_around_reference(
     probabilities = [w / total_weight for w in weights]
 
     n_to_sample = min(n - 1, len(sorted_leaves_without_ref))
-    selected_leaves = random.choices(
-        sorted_leaves_without_ref, weights=probabilities, k=n_to_sample
+
+    rng = np.random.default_rng(seed)
+    selected_indices = rng.choice(
+        len(sorted_leaves_without_ref),
+        size=n_to_sample,
+        replace=False,
+        p=probabilities
     )
+    selected_leaves = [sorted_leaves_without_ref[i] for i in selected_indices]
 
     reference_leaf = next(name for name in sorted_leaves if reference in name)
     selected_leaves = [reference_leaf] + selected_leaves

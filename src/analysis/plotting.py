@@ -13,19 +13,20 @@ pio.renderers.default = "plotly_mimetype+notebook_connected"
 
 def tree_style_with_categorical_annotation(
     categories: dict[str, str],
+    color_map: dict[str, str],
     highlight: list[str] | None = None,
 ) -> TreeStyle:
-    unique_categories = set(categories.values())
-    colors = apc.palettes.primary.colors
-    color_map = {cat: colors[i % len(colors)] for i, cat in enumerate(unique_categories)}
-
     if highlight is None:
         highlight = []
 
     def layout(node):
-        if node.is_leaf():
-            node_style = NodeStyle()
+        node_style = NodeStyle()
+        node_style["hz_line_width"] = 2
+        node_style["vt_line_width"] = 2
+        node_style["hz_line_color"] = "#666666"
+        node_style["vt_line_color"] = "#666666"
 
+        if node.is_leaf():
             is_highlighted = highlight and any(key in node.name for key in highlight)
 
             if is_highlighted:
@@ -34,7 +35,9 @@ def tree_style_with_categorical_annotation(
 
                 matched_key = next((key for key in highlight if key in node.name), None)
                 if matched_key:
-                    text_face = TextFace(matched_key, fsize=32, bold=False, ftype=DEFAULT_FONT)
+                    text_face = TextFace(
+                        f" {matched_key}", fsize=36, bold=False, ftype=DEFAULT_FONT
+                    )
                     node.add_face(text_face, column=0, position="branch-right")
             else:
                 node_style["shape"] = "circle"
@@ -47,14 +50,19 @@ def tree_style_with_categorical_annotation(
             else:
                 node_style["fgcolor"] = "#000000"
 
-            node.set_style(node_style)
+        node.set_style(node_style)
 
     tree_style = TreeStyle()
     tree_style.layout_fn = layout
     tree_style.show_leaf_name = False
     tree_style.show_branch_length = False
+    tree_style.show_scale = False
     tree_style.scale = 240
     tree_style.rotation = 90
+    tree_style.margin_left = 20
+    tree_style.margin_right = 20
+    tree_style.margin_top = 20
+    tree_style.margin_bottom = 20
 
     return tree_style
 
@@ -81,9 +89,13 @@ def tree_style_with_scalar_annotation(
         highlight = []
 
     def layout(node):
-        if node.is_leaf():
-            node_style = NodeStyle()
+        node_style = NodeStyle()
+        node_style["hz_line_width"] = 2
+        node_style["vt_line_width"] = 2
+        node_style["hz_line_color"] = "#333333"
+        node_style["vt_line_color"] = "#333333"
 
+        if node.is_leaf():
             is_highlighted = highlight and any(key in node.name for key in highlight)
 
             if is_highlighted:
@@ -92,7 +104,9 @@ def tree_style_with_scalar_annotation(
 
                 matched_key = next((key for key in highlight if key in node.name), None)
                 if matched_key:
-                    text_face = TextFace(matched_key, fsize=32, bold=False, ftype="Arial")
+                    text_face = TextFace(
+                        f" {matched_key}", fsize=36, bold=False, ftype=DEFAULT_FONT
+                    )
                     node.add_face(text_face, column=0, position="branch-right")
             else:
                 node_style["shape"] = "circle"
@@ -106,14 +120,19 @@ def tree_style_with_scalar_annotation(
             else:
                 node_style["fgcolor"] = "#000000"
 
-            node.set_style(node_style)
+        node.set_style(node_style)
 
     tree_style = TreeStyle()
     tree_style.layout_fn = layout
     tree_style.show_leaf_name = False
     tree_style.show_branch_length = False
+    tree_style.show_scale = False
     tree_style.scale = 240
     tree_style.rotation = 90
+    tree_style.margin_left = 20
+    tree_style.margin_right = 20
+    tree_style.margin_top = 20
+    tree_style.margin_bottom = 20
 
     return tree_style
 
@@ -122,14 +141,13 @@ def interactive_layer_weight_plot(
     df: pd.DataFrame,
     regression_df: pd.DataFrame,
     query_to_subfamily: dict[str, str],
+    subfamily_colors: dict[str, str],
     num_layers: int = 22,
 ) -> go.Figure:
     """Create interactive plotly figure with dropdown to select layer weights."""
 
-    queries = df["query"].unique()
-    subfamilies = df["subfamily"].unique()
-    colors = [color.hex_code for color in apc.palettes.primary.colors[: len(subfamilies)]]
-    subfamily_colors = {subfamily: colors[i] for i, subfamily in enumerate(subfamilies)}
+    queries = sorted(df["query"].unique().tolist())
+    subfamilies = df["target_subfamily"].unique()
 
     fig = make_subplots(
         rows=1,
@@ -167,7 +185,7 @@ def interactive_layer_weight_plot(
             query_data = df[df["query"] == query]
 
             for subfamily in subfamilies:
-                subfamily_data = query_data[query_data["subfamily"] == subfamily]
+                subfamily_data = query_data[query_data["target_subfamily"] == subfamily]
 
                 if not subfamily_data.empty:
                     fig.add_trace(
@@ -273,7 +291,7 @@ def interactive_layer_weight_plot(
                 y=1.2,
                 yanchor="middle",
                 pad=dict(t=0, b=0, l=2, r=2),
-                bgcolor="rgba(255,255,255,0.95)",
+                bgcolor=apc.parchment.hex_code,
                 bordercolor="rgba(0,0,0,0.2)",
                 borderwidth=1,
                 font=dict(size=12),
@@ -289,6 +307,8 @@ def interactive_layer_weight_plot(
             y=1.20,
             yanchor="middle",
         ),
+        plot_bgcolor=apc.parchment.hex_code,
+        paper_bgcolor=apc.parchment.hex_code,
     )
 
     x_min = df["patristic_distance"].min()

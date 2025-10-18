@@ -33,7 +33,12 @@ def get_model_input_data(msa: MSA, device: torch.device) -> dict[str, torch.Tens
 
 
 def get_sequence_weight_data(model_results: dict[str, Any]) -> torch.Tensor:
-    return torch.concat(tuple(model_results["seq_weights_list_d"].values()), dim=0)
+    """Returns the per-layer sequence weight data.
+
+    Returns:
+        Tensor: Shape (N, 22), where N is the number of sequences (including query).
+    """
+    return torch.concat(tuple(model_results["seq_weights_list_d"].values()), dim=0).T
 
 
 def to_cpu_dict(obj: Any) -> Any:
