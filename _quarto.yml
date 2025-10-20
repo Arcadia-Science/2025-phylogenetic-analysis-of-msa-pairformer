@@ -91,4 +91,5 @@ html-table-processing: none
 filters:
 - abstract-section
 - collapse-output
+- filter-warnings
 demo-title: A brief syntax demo

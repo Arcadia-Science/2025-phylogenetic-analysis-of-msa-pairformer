@@ -163,8 +163,8 @@ def interactive_layer_weight_plot(
         horizontal_spacing=0.08,
         shared_xaxes=True,
         shared_yaxes=True,
-        x_title="Tree distance (patristic)",
-        y_title="Sequence weight",
+        x_title="Sequence weight",
+        y_title="Tree distance (patristic)",
         specs=[[{"type": "xy"}, {"type": "xy"}, {"type": "xy"}]],
     )
 
@@ -190,8 +190,8 @@ def interactive_layer_weight_plot(
                 if not subfamily_data.empty:
                     fig.add_trace(
                         go.Scatter(
-                            x=subfamily_data["patristic_distance"],
-                            y=subfamily_data[weight_col],
+                            x=subfamily_data[weight_col],
+                            y=subfamily_data["patristic_distance"],
                             mode="markers",
                             marker=dict(color=subfamily_colors[subfamily], size=5, opacity=0.45),
                             name=subfamily,
@@ -222,8 +222,8 @@ def interactive_layer_weight_plot(
             r_squared = reg_row["r_squared"].iloc[0]
             p_value = reg_row["p_value"].iloc[0]
 
-            x_min = query_data["patristic_distance"].min()
-            x_max = query_data["patristic_distance"].max()
+            x_min = query_data[weight_col].min()
+            x_max = query_data[weight_col].max()
             x_line = [x_min + i * (x_max - x_min) / 100 for i in range(101)]
             y_line = [slope * x + intercept for x in x_line]
 
@@ -265,17 +265,12 @@ def interactive_layer_weight_plot(
             label = f"Layer {option_idx - 1}"
             weight_col = f"layer_{option_idx - 1}_weight"
 
-        y_min = df[weight_col].min()
-        y_max = df[weight_col].max()
-        y_range = [y_min * 0.90, y_max * 1.1]
-
         buttons.append(
             dict(
                 label=label,
                 method="update",
                 args=[
                     {"visible": visibility},
-                    {"yaxis.range": y_range, "yaxis2.range": y_range, "yaxis3.range": y_range},
                 ],
             )
         )
@@ -291,7 +286,7 @@ def interactive_layer_weight_plot(
                 y=1.2,
                 yanchor="middle",
                 pad=dict(t=0, b=0, l=2, r=2),
-                bgcolor=apc.parchment.hex_code,
+                bgcolor=apc.white.hex_code,
                 bordercolor="rgba(0,0,0,0.2)",
                 borderwidth=1,
                 font=dict(size=12),
@@ -307,20 +302,14 @@ def interactive_layer_weight_plot(
             y=1.20,
             yanchor="middle",
         ),
-        plot_bgcolor=apc.parchment.hex_code,
-        paper_bgcolor=apc.parchment.hex_code,
+        plot_bgcolor=apc.white.hex_code,
+        paper_bgcolor=apc.white.hex_code,
     )
 
-    x_min = df["patristic_distance"].min()
-    x_max = df["patristic_distance"].max()
-    x_diff = x_max - x_min
-    fig.update_xaxes(range=[x_min - 0.05 * x_diff, x_max + 0.05 * x_diff], matches="x")
-
-    median_y_min = df["median_weight"].min()
-    median_y_max = df["median_weight"].max()
-    median_y_diff = median_y_max - median_y_min
-    median_y_range = [median_y_min - 0.05 * median_y_diff, median_y_max + 0.05 * median_y_diff]
-    fig.update_yaxes(range=median_y_range)
+    y_min = df["patristic_distance"].min()
+    y_max = df["patristic_distance"].max()
+    y_diff = y_max - y_min
+    fig.update_yaxes(range=[y_min - 0.05 * y_diff, y_max + 0.05 * y_diff], matches="y")
 
     apc.plotly.style_plot(fig, monospaced_axes="all", row=1, col=1)
     apc.plotly.style_plot(fig, monospaced_axes="all", row=1, col=2)
