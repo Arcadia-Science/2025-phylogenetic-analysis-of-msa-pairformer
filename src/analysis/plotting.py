@@ -1,10 +1,8 @@
 import arcadia_pycolor as apc
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
-import seaborn as sns
 from arcadia_pycolor.gradient import Gradient
 from arcadia_pycolor.style_defaults import DEFAULT_FONT
 from ete3 import NodeStyle, TextFace, TreeStyle
@@ -325,14 +323,11 @@ def ridgeline_r2_plot(
     df: pd.DataFrame,
     size_col: str = "Size",
     y_col: str = "Adjusted R2",
-    n_bins: int = 10,
     gradient=None,
-    bw_adjust: float = 0.5,
-    aspect: int = 15,
-    height: float = 0.5,
-    hspace: float = -0.25,
+    bw_adjust: float = 0.15,
+    gap: float = 0.7,
 ):
-    sns.set_theme(style="white", rc={"axes.facecolor": (0, 0, 0, 0), "figure.autolayout": False})
+    from scipy.stats import gaussian_kde
 
     if gradient is None:
         gradient = apc.gradients.sunset.reverse()
@@ -357,89 +352,236 @@ def ridgeline_r2_plot(
     actual_n_bins = len(df_copy["Size Bin"].unique())
     colors = [c.hex_code for c in gradient.resample_as_palette(actual_n_bins)]
 
-    bins = sorted(df_copy["Size Bin"].unique(), reverse=True)
-    df_copy["Size Bin Label"] = df_copy["Size Bin"]
+    bins = sorted(df_copy["Size Bin"].unique())
 
-    df_copy["Size Bin Label"] = pd.Categorical(
-        df_copy["Size Bin Label"],
-        categories=list(reversed(bin_labels)),
-        ordered=True,
+    fig = make_subplots(
+        rows=1,
+        cols=2,
+        column_widths=[0.25, 0.75],
+        horizontal_spacing=0.25,
+        shared_yaxes=True,
     )
 
-    palette = {
-        label: colors[bin_labels.index(label)]
-        for label in bin_labels
-        if label in df_copy["Size Bin Label"].values
-    }
+    bin_counts = []
+    bin_offsets = []
 
-    g = sns.FacetGrid(
-        df_copy,
-        row="Size Bin Label",
-        hue="Size Bin Label",
-        aspect=aspect,
-        height=height,
-        palette=palette,
-    )
+    x_min = 0.3
+    x_max = 1.0
+    x_range = np.linspace(x_min, x_max, 200)
 
-    g.map(
-        sns.kdeplot,
-        y_col,
-        bw_adjust=bw_adjust,
-        clip_on=False,
-        fill=True,
-        alpha=1,
-        linewidth=1.5,
-        clip=(0.3, 1.0),
-    )
-    g.map(sns.kdeplot, y_col, clip_on=False, color="w", lw=2, bw_adjust=bw_adjust, clip=(0.3, 1.0))
-    g.refline(y=0, linewidth=2, linestyle="-", color=None, clip_on=False)
+    for i, bin_label in enumerate(bins):
+        offset = i * gap
+        bin_offsets.append(offset)
+        bin_counts.append(len(df_copy[df_copy["Size Bin"] == bin_label]))
+        bin_data = df_copy[df_copy["Size Bin"] == bin_label]
+        values = bin_data[y_col].values
 
-    def label(x, color, label):
-        ax = plt.gca()
-        ax.text(
-            0,
-            0.2,
-            label,
-            fontweight="bold",
-            color=color,
-            ha="left",
-            va="center",
-            transform=ax.transAxes,
+        if len(values) > 1:
+            kde = gaussian_kde(values, bw_method=bw_adjust)
+            density = kde(x_range)
+
+            max_density = density.max()
+            if max_density > 0:
+                normalized_density = density / max_density
+            else:
+                normalized_density = density
+        else:
+            normalized_density = np.zeros_like(x_range)
+
+        y_values = normalized_density + bin_offsets[i]
+
+        hex_color = colors[i].lstrip("#")
+        r, g_val, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+        rgba_solid = f"rgba({r},{g_val},{b},0.9)"
+        rgba_medium = f"rgba({r},{g_val},{b},0.2)"
+        rgba_transparent = f"rgba({r},{g_val},{b},0.0)"
+
+        fig.add_trace(
+            go.Scatter(
+                x=x_range,
+                y=np.full_like(x_range, bin_offsets[i]),
+                mode="lines",
+                line=dict(color=colors[i], width=0),
+                showlegend=False,
+                hoverinfo="skip",
+            ),
+            row=1,
+            col=2,
         )
 
-    g.map(label, y_col)
-    g.figure.subplots_adjust(hspace=hspace)
-    g.set_titles("")
-    g.set(yticks=[], ylabel="")
-    g.despine(bottom=True, left=True)
+        fig.add_trace(
+            go.Scatter(
+                x=x_range,
+                y=y_values,
+                mode="lines",
+                line=dict(color="#444444", width=2),
+                fill="tonexty",
+                fillgradient=dict(
+                    type="vertical",
+                    colorscale=[
+                        (0.0, rgba_transparent),
+                        (0.1, rgba_medium),
+                        (0.8, rgba_solid),
+                        (1.0, rgba_solid),
+                    ],
+                ),
+                showlegend=False,
+                name=bin_label,
+                hovertemplate=f"MSA depth: {bin_label}<br>{y_col}: %{{x:.3f}}<extra></extra>",
+            ),
+            row=1,
+            col=2,
+        )
 
-    for ax in g.axes.flat:
-        ax.set_xlim(left=0.3, right=1)
-        apc.mpl.style_plot(ax, monospaced_axes="x")
+    for i, bin_label in enumerate(bins):
+        bar_height = gap * 0.8
+        y_bottom = bin_offsets[i] - bar_height / 2
+        y_top = bin_offsets[i] + bar_height / 2
 
-    x_label = y_col.replace("R2", "R$^2$")
-    g.set_axis_labels(x_var=x_label, fontweight="bold", fontsize=16)
-    g.figure.text(
-        0.084,
-        0.47,
-        "MSA depth range",
-        va="center",
-        rotation=90,
-        fontweight="bold",
-        fontsize=16,
+        hex_color = colors[i].lstrip("#")
+        r, g_val, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
+        rgba_opaque = f"rgba({r},{g_val},{b},1.0)"
+        rgba_semi = f"rgba({r},{g_val},{b},0.5)"
+
+        fig.add_trace(
+            go.Scatter(
+                x=[0, bin_counts[i], bin_counts[i], 0, 0],
+                y=[y_bottom, y_bottom, y_top, y_top, y_bottom],
+                fill="toself",
+                fillgradient=dict(
+                    type="horizontal",
+                    colorscale=[(0, rgba_opaque), (1, rgba_semi)],
+                ),
+                mode="lines",
+                line=dict(color="#444444", width=2),
+                showlegend=False,
+                name=str(bin_counts[i]),
+                hoverinfo="name",
+            ),
+            row=1,
+            col=1,
+        )
+
+    for i in range(len(bin_offsets)):
+        fig.add_shape(
+            type="line",
+            x0=0,
+            x1=1,
+            y0=bin_offsets[i],
+            y1=bin_offsets[i],
+            xref="paper",
+            yref="y",
+            line=dict(color="rgba(150, 150, 150, 0.7)", width=0.75),
+            layer="below",
+        )
+
+    fig.add_shape(
+        type="rect",
+        x0=0.23,
+        x1=0.405,
+        y0=0.03,
+        y1=0.86,
+        xref="paper",
+        yref="paper",
+        fillcolor=apc.parchment.hex_code,
+        line=dict(color="black", width=1),
+        layer="below",
     )
 
-    g.axes[-1, 0].tick_params(axis="x", bottom=True, length=4, width=1)
+    for i, bin_label in enumerate(bins):
+        label_color = "#888888" if (i == 0 and gradient.name == "verde_r") else colors[i]
+        fig.add_annotation(
+            x=0.317,
+            y=bin_offsets[i],
+            xref="paper",
+            yref="y",
+            text=bin_label,
+            showarrow=False,
+            font=dict(size=20, color=label_color, family="SuisseIntlMono"),
+            xanchor="center",
+            yanchor="middle",
+        )
 
-    return g
+    fig.add_annotation(
+        x=0.317,
+        y=0.86,
+        xref="paper",
+        yref="paper",
+        text="MSA depth",
+        showarrow=False,
+        font=dict(size=22, color="black", family="SuisseIntl-Medium"),
+        xanchor="center",
+        yanchor="bottom",
+    )
+
+    fig.update_xaxes(
+        title=dict(text="Count", font=dict(family="SuisseIntl-Medium", size=20)),
+        autorange="reversed",
+        showline=True,
+        linewidth=2.5,
+        showgrid=False,
+        ticks="outside",
+        tickwidth=2.5,
+        tickfont=dict(size=16),
+        row=1,
+        col=1,
+    )
+
+    fig.update_xaxes(
+        title=dict(text=y_col.replace("R2", "R²"), font=dict(family="SuisseIntl-Medium", size=20)),
+        range=[x_min, x_max],
+        showline=True,
+        linewidth=2.5,
+        linecolor="black",
+        ticks="outside",
+        tickwidth=2.5,
+        tickfont=dict(size=16),
+        row=1,
+        col=2,
+    )
+
+    fig.update_yaxes(
+        showticklabels=False,
+        ticks="",
+        showline=False,
+        showgrid=False,
+        row=1,
+        col=1,
+    )
+
+    fig.update_yaxes(
+        showticklabels=False,
+        ticks="",
+        showline=False,
+        showgrid=False,
+        row=1,
+        col=2,
+    )
+
+    fig.update_layout(
+        width=800,
+        height=400,
+        plot_bgcolor=apc.white.hex_code,
+        paper_bgcolor=apc.white.hex_code,
+        showlegend=False,
+        margin=dict(l=80, r=40, t=40, b=80),
+        hoverlabel=dict(
+            bgcolor="white",
+            font_size=16,
+        ),
+    )
+
+    apc.plotly.style_plot(fig, monospaced_axes="x", row=1, col=1)
+    apc.plotly.style_plot(fig, monospaced_axes="x", row=1, col=2)
+
+    return fig
 
 
 def stacked_feature_importance_plot(
     df: pd.DataFrame,
     size_col: str = "Size",
     feature_cols: list[int] | None = None,
-    n_bins: int = 10,
-    gap: float = 0.0,
+    gap: float = -0.78,
     gradient=None,
 ):
     if feature_cols is None:
@@ -552,42 +694,27 @@ def stacked_feature_importance_plot(
             )
         )
 
-    colorbar_x = 1.02
-    colorbar_y_center = 0.37
-    colorbar_len = 0.5
-    colorbar_y_top = colorbar_y_center + colorbar_len / 2
-    colorbar_y_bottom = colorbar_y_center - colorbar_len / 2
+    bin_label_annotations = []
+    label_offset = 0.1
+    for i in range(len(bins)):
+        bin_label = bins[i]
+        offset = i * (1.0 + gap) + label_offset
+        hex_color = colors[i].lstrip("#")
+        label_color = "#888888" if (i == 0 and gradient.name == "verde_r") else f"#{hex_color}"
 
-    fig.add_trace(
-        go.Scatter(
-            x=[None],
-            y=[None],
-            mode="markers",
-            marker=dict(
-                colorscale=plotly_colorscale,
-                showscale=True,
-                cmin=0,
-                cmax=1,
-                colorbar=dict(
-                    title=dict(
-                        text="MSA depth",
-                        side="right",
-                        font=dict(family="SuisseIntl-Medium", size=20),
-                    ),
-                    thickness=20,
-                    len=colorbar_len,
-                    x=colorbar_x,
-                    xanchor="left",
-                    y=colorbar_y_center,
-                    yanchor="middle",
-                    tickvals=[],
-                    ticktext=[],
-                    outlinewidth=0,
-                ),
-            ),
-            hoverinfo="none",
+        bin_label_annotations.append(
+            dict(
+                text=bin_label,
+                x=1.01,
+                y=offset,
+                xref="paper",
+                yref="y",
+                xanchor="left",
+                yanchor="middle",
+                showarrow=False,
+                font=dict(family="SuisseIntlMono", size=20, color=label_color),
+            )
         )
-    )
 
     y_max = (len(bins) - 1) * (1.0 + gap) + 1.0
     num_segments = 50
@@ -654,7 +781,7 @@ def stacked_feature_importance_plot(
             dict(
                 text="Feature importance",
                 x=-0.04,
-                y=0.37,
+                y=0.36,
                 xref="paper",
                 yref="paper",
                 xanchor="center",
@@ -664,52 +791,21 @@ def stacked_feature_importance_plot(
                 textangle=-90,
             ),
             dict(
-                text="Large",
-                x=colorbar_x + 0.01,
-                y=colorbar_y_top - 0.03,
+                text="MSA depth",
+                x=1.01,
+                y=0.73,
                 xref="paper",
                 yref="paper",
                 xanchor="left",
-                yanchor="bottom",
+                yanchor="middle",
                 showarrow=False,
-                font=dict(size=18),
+                font=dict(family="SuisseIntl-Medium", size=18),
                 textangle=0,
             ),
-            dict(
-                text="Small",
-                x=colorbar_x + 0.01,
-                y=colorbar_y_bottom + 0.024,
-                xref="paper",
-                yref="paper",
-                xanchor="left",
-                yanchor="top",
-                showarrow=False,
-                font=dict(size=18),
-                textangle=0,
-            ),
-        ],
+        ]
+        + bin_label_annotations,
     )
 
     apc.plotly.style_plot(fig, monospaced_axes="x")
 
     return fig
-
-
-if __name__ == "__main__":
-    from pathlib import Path
-
-    apc.plotly.setup()
-    apc.mpl.setup()
-
-    df = pd.read_csv(Path("test2.tsv"), sep="\t")
-
-    number_cols = [str(i) for i in range(22)]
-    df = df.rename(columns={col: int(col) for col in number_cols if col in df.columns})
-
-    g_ridge = ridgeline_r2_plot(df, gradient=apc.gradients.verde.reverse())
-    g_ridge.savefig("seaborn_ridgeline_plot.png", dpi=300, bbox_inches="tight", facecolor="white")
-    print("Plot saved to seaborn_ridgeline_plot.png")
-
-    fig = stacked_feature_importance_plot(df, gap=-0.78, gradient=apc.gradients.verde.reverse())
-    fig.write_html("feature_importance.html")
-    print("Plot saved to feature_importance.html")

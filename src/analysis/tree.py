@@ -104,10 +104,7 @@ def subset_tree_around_reference(
 
     rng = np.random.default_rng(seed)
     selected_indices = rng.choice(
-        len(sorted_leaves_without_ref),
-        size=n_to_sample,
-        replace=False,
-        p=probabilities
+        len(sorted_leaves_without_ref), size=n_to_sample, replace=False, p=probabilities
     )
     selected_leaves = [sorted_leaves_without_ref[i] for i in selected_indices]
 
