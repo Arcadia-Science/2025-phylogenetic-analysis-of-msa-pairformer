@@ -13,6 +13,10 @@ def read_newick(path: str | Path) -> Tree:
     return Tree(str(path), format=1)
 
 
+def write_newick(tree: Tree, path: str | Path) -> None:
+    tree.write(outfile=str(path), format=1)
+
+
 def get_patristic_distance(tree: Tree, reference: str) -> pd.Series:
     for leaf in tree.get_leaves():
         if reference in leaf.name:

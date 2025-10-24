@@ -12,6 +12,56 @@ from plotly.subplots import make_subplots
 pio.renderers.default = "plotly_mimetype+notebook_connected"
 
 
+def tree_style_with_highlights(
+    highlight: list[str] | None = None,
+    highlight_color: str = "#FF6B6B",
+) -> TreeStyle:
+    if highlight is None:
+        highlight = []
+
+    def layout(node):
+        node_style = NodeStyle()
+        node_style["hz_line_width"] = 2
+        node_style["vt_line_width"] = 2
+        node_style["hz_line_color"] = "#666666"
+        node_style["vt_line_color"] = "#666666"
+
+        if node.is_leaf():
+            is_highlighted = any(key in node.name for key in highlight)
+
+            if is_highlighted:
+                node_style["shape"] = "circle"
+                node_style["size"] = 8
+                node_style["fgcolor"] = highlight_color
+
+                matched_key = next((key for key in highlight if key in node.name), None)
+                if matched_key:
+                    text_face = TextFace(
+                        f" {matched_key}", fsize=36, bold=False, ftype=DEFAULT_FONT
+                    )
+                    node.add_face(text_face, column=0, position="branch-right")
+            else:
+                node_style["shape"] = "circle"
+                node_style["size"] = 8
+                node_style["fgcolor"] = "#CCCCCC"
+
+        node.set_style(node_style)
+
+    tree_style = TreeStyle()
+    tree_style.layout_fn = layout
+    tree_style.show_leaf_name = False
+    tree_style.show_branch_length = False
+    tree_style.show_scale = False
+    tree_style.scale = 240
+    tree_style.rotation = 90
+    tree_style.margin_left = 20
+    tree_style.margin_right = 20
+    tree_style.margin_top = 20
+    tree_style.margin_bottom = 20
+
+    return tree_style
+
+
 def tree_style_with_categorical_annotation(
     categories: dict[str, str],
     color_map: dict[str, str],
@@ -324,7 +374,7 @@ def ridgeline_r2_plot(
     size_col: str = "Size",
     y_col: str = "Adjusted R2",
     gradient=None,
-    bw_adjust: float = 0.15,
+    bw_adjust: float = 0.11,
     gap: float = 0.7,
 ):
     from scipy.stats import gaussian_kde
@@ -375,6 +425,9 @@ def ridgeline_r2_plot(
         bin_counts.append(len(df_copy[df_copy["Size Bin"] == bin_label]))
         bin_data = df_copy[df_copy["Size Bin"] == bin_label]
         values = bin_data[y_col].values
+
+        mean_val = values.mean() if len(values) > 0 else 0
+        std_val = values.std() if len(values) > 0 else 0
 
         if len(values) > 1:
             kde = gaussian_kde(values, bw_method=bw_adjust)
@@ -427,13 +480,16 @@ def ridgeline_r2_plot(
                 ),
                 showlegend=False,
                 name=bin_label,
-                hovertemplate=f"MSA depth: {bin_label}<br>{y_col}: %{{x:.3f}}<extra></extra>",
+                hovertemplate=(
+                    f"MSA depth: {bin_label}<br>Mean ± SD: "
+                    f"{mean_val:.2f} ± {std_val:.2f}<extra></extra>",
+                ),
             ),
             row=1,
             col=2,
         )
 
-    for i, bin_label in enumerate(bins):
+    for i in range(len(bins)):
         bar_height = gap * 0.8
         y_bottom = bin_offsets[i] - bar_height / 2
         y_top = bin_offsets[i] + bar_height / 2
@@ -610,11 +666,6 @@ def stacked_feature_importance_plot(
     actual_n_bins = len(df_copy["Size Bin"].unique())
     colors = [c.hex_code for c in gradient.resample_as_palette(actual_n_bins)]
 
-    plotly_colorscale = [
-        [i / 99, gradient.map_values([i], min_value=0, max_value=99)[0].hex_code]
-        for i in range(100)
-    ]
-
     bins = sorted(df_copy["Size Bin"].unique())
     feature_indices = np.arange(len(feature_cols))
 
@@ -689,7 +740,11 @@ def stacked_feature_importance_plot(
                     ],
                 ),
                 showlegend=False,
-                hovertemplate=f"MSA depth: {bin_label}<br>Layer: %{{x}}<br>Importance: %{{customdata[0]:.1f}} ± %{{customdata[1]:.1f}}%<extra></extra>",
+                hovertemplate=(
+                    f"MSA depth: {bin_label}<br>Layer: "
+                    f"%{{x}}<br>Importance: %{{customdata[0]:.1f}} "
+                    f"± %{{customdata[1]:.1f}}%<extra></extra>"
+                ),
                 customdata=hover_data,
             )
         )
@@ -772,7 +827,7 @@ def stacked_feature_importance_plot(
         plot_bgcolor=apc.white.hex_code,
         paper_bgcolor=apc.white.hex_code,
         showlegend=False,
-        margin=dict(l=80, r=120, t=40, b=60),
+        margin=dict(l=80, r=120, t=0, b=60),
         hoverlabel=dict(
             bgcolor="white",
             font_size=16,

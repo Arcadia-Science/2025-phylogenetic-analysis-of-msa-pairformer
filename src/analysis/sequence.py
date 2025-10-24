@@ -7,6 +7,7 @@ from typing import Literal
 
 import biotite.sequence as seq
 import biotite.sequence.io.fasta as fasta
+from ete3 import Tree
 
 from MSA_Pairformer.MSA_Pairformer.dataset import MSA
 
@@ -56,7 +57,42 @@ def write_fasta_like(seqs: Sequence[str], deflines: Sequence[str], output: Path)
             fp.write(f"{seq}\n")
 
 
-def write_filtered_msa(
+def filter_msa_by_tree(msa: MSA, tree: Tree) -> tuple[list[str], list[str]]:
+    """Filters MSA by names matching tree leaf names.
+
+    Returns:
+        tuple[list[str], list[str]]:
+            First list is sequence strings in A3M format, second list is deflines.
+
+    Notes:
+        - It would be natural to return a new `MSA_Pairformer.dataset.MSA` object, but
+          the constructor for this class must load an A3M path, making construction of
+          this object *without* an A3M difficult.
+    """
+    tree_leaf_ids = set(tree.get_leaf_names())
+
+    # Get all sequences, maintaining insertions.
+    unfiltered_seqs, unfiltered_ids = msa.parse_a3m_file(
+        keep_insertions=True,
+        to_upper=False,
+        remove_lowercase_cols=False,
+    )
+
+    filtered_ids = []
+    filtered_seqs = []
+
+    for idx in msa.select_diverse_indices:
+        unfiltered_id = unfiltered_ids[idx]
+        unfiltered_seq = unfiltered_seqs[idx]
+
+        if unfiltered_id in tree_leaf_ids:
+            filtered_ids.append(unfiltered_id)
+            filtered_seqs.append(unfiltered_seq)
+
+    return filtered_seqs, filtered_ids
+
+
+def write_processed_msa(
     msa: MSA,
     output: Path,
     format: Literal["fasta", "a3m", "unaligned_fasta"],
