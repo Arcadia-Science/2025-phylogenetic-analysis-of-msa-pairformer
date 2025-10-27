@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from ete3 import Tree
+from scipy import stats
 
 
 def read_newick(path: str | Path) -> Tree:
@@ -238,3 +239,92 @@ async def run_fasttree_async(
                     stderr=log_pointer,
                 )
                 await fasttree_process.wait()
+
+
+def build_distance_matrix(tree: Tree) -> np.ndarray:
+    """Build pairwise distance matrix for all nodes in the tree.
+
+    Args:
+        tree: The phylogenetic tree
+
+    Returns:
+        Distance matrix where D[i,j] is the patristic distance between nodes i and j
+    """
+    all_nodes = list(tree.traverse("postorder"))
+    n_nodes = len(all_nodes)
+
+    node_to_idx = {id(node): i for i, node in enumerate(all_nodes)}
+
+    dist_matrix = np.zeros((n_nodes, n_nodes))
+
+    for i, node_a in enumerate(all_nodes):
+        for j, node_b in enumerate(all_nodes):
+            if i != j:
+                dist_matrix[i, j] = node_a.get_distance(node_b)
+
+    return dist_matrix
+
+
+def distance_laplacian_spectrum(tree: Tree) -> dict[str, np.ndarray | float]:
+    """Calculate distance Laplacian spectrum statistics.
+
+    Computes eigenvalues of the distance Laplacian matrix and returns the principal
+    information needed for statistics 41-44 from Lewitus & Morlon (2016):
+    - Principal eigenvalue
+    - Eigengap (position of largest difference between eigenvalues)
+    - Asymmetry (skewness of eigenvalue distribution)
+    - Peakedness (max of spectral density)
+
+    Args:
+        tree: The phylogenetic tree
+
+    Returns:
+        Dictionary with keys:
+            - eigenvalues: All eigenvalues >= 1
+            - principal_eigenvalue: Maximum eigenvalue
+            - eigengap: Position of largest gap between consecutive eigenvalues
+            - asymmetry: Skewness of eigenvalue distribution
+            - peakedness: Maximum of the spectral density distribution
+    """
+    dist_matrix = build_distance_matrix(tree)
+
+    row_sums = dist_matrix.sum(axis=1)
+    distance_laplacian = np.diag(row_sums) - dist_matrix
+
+    eigenvalues = np.linalg.eigvalsh(distance_laplacian)
+    eigenvalues = np.sort(eigenvalues[eigenvalues >= 1])[::-1]
+
+    principal_eigenvalue = eigenvalues[0]
+
+    gaps = np.abs(np.diff(eigenvalues))
+    eigengap_position = int(np.argmax(gaps) + 1)  # 1-indexed to match treestats
+
+    asymmetry = stats.skew(eigenvalues)
+
+    log_eigenvalues = np.log(eigenvalues)
+    std = np.std(log_eigenvalues, ddof=1)
+    iqr = np.percentile(log_eigenvalues, 75) - np.percentile(log_eigenvalues, 25)
+
+    # This matches R's built-in function `stats::bw.nrd0`: for bandwidth estimation.
+    # https://stat.ethz.ch/R-manual/R-patched/library/stats/html/bandwidth.html
+    bw = 0.9 * min(std, iqr / 1.34) * len(log_eigenvalues) ** (-1 / 5)
+
+    x_range = np.linspace(log_eigenvalues.min() - 3 * bw, log_eigenvalues.max() + 3 * bw, 4096)
+
+    density = np.zeros_like(x_range)
+    for log_eig in log_eigenvalues:
+        density += stats.norm.pdf(x_range, loc=log_eig, scale=bw)
+    density /= len(log_eigenvalues)
+
+    integral = np.trapz(density, x_range)
+    density_normalized = density / integral
+
+    peakedness = density_normalized.max()
+
+    return {
+        "eigenvalues": eigenvalues,
+        "principal_eigenvalue": principal_eigenvalue,
+        "eigengap": eigengap_position,
+        "asymmetry": asymmetry,
+        "peakedness": peakedness,
+    }

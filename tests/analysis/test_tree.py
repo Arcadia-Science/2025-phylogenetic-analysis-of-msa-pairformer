@@ -1,11 +1,13 @@
 from pathlib import Path
 from typing import Protocol
 
+import numpy as np
 import pandas as pd
 import pytest
 from analysis.tree import (
     cherry_count_statistic,
     colless_statistic,
+    distance_laplacian_spectrum,
     phylogenetic_diversity_statistic,
 )
 from ete3 import Tree
@@ -17,10 +19,30 @@ class TreeMetric(Protocol):
     def __call__(self, tree: Tree) -> float | int: ...
 
 
+def laplace_spectrum_principal_eigenvalue_statistic(tree: Tree) -> float:
+    return distance_laplacian_spectrum(tree)["principal_eigenvalue"]
+
+
+def laplace_spectrum_eigengap_statistic(tree: Tree) -> int:
+    return distance_laplacian_spectrum(tree)["eigengap"]
+
+
+def laplace_spectrum_asymmetry_statistic(tree: Tree) -> float:
+    return distance_laplacian_spectrum(tree)["asymmetry"]
+
+
+def laplace_spectrum_peakedness_statistic(tree: Tree) -> float:
+    return distance_laplacian_spectrum(tree)["peakedness"]
+
+
 METRIC_FUNCTIONS: dict[str, TreeMetric] = {
     "cherries": cherry_count_statistic,
     "colless": colless_statistic,
     "phylogenetic_diversity": phylogenetic_diversity_statistic,
+    "laplace_spectrum_principal_eigenvalue": laplace_spectrum_principal_eigenvalue_statistic,
+    "laplace_spectrum_eigengap": laplace_spectrum_eigengap_statistic,
+    "laplace_spectrum_asymmetry": laplace_spectrum_asymmetry_statistic,
+    "laplace_spectrum_peakedness": laplace_spectrum_peakedness_statistic,
 }
 
 
@@ -41,7 +63,18 @@ def newick_trees():
 
 
 @pytest.mark.parametrize("tree_id", range(1, 11))
-@pytest.mark.parametrize("metric", ["colless", "phylogenetic_diversity", "cherries"])
+@pytest.mark.parametrize(
+    "metric",
+    [
+        "colless",
+        "phylogenetic_diversity",
+        "cherries",
+        "laplace_spectrum_principal_eigenvalue",
+        "laplace_spectrum_eigengap",
+        "laplace_spectrum_asymmetry",
+        "laplace_spectrum_peakedness",
+    ],
+)
 def test_tree_metric(tree_id, metric, ground_truth_stats, newick_trees):
     tree = newick_trees[tree_id]
     expected_value = ground_truth_stats.loc[tree_id, metric]

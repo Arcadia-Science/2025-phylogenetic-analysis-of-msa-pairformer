@@ -14,10 +14,14 @@ The test data was generated using the R script `generate_test_trees.R`, which:
 
 2. Saves each tree in Newick format to `tree_{N}.newick`
 
-3. Calculates three statistics for each tree using the `treestats` package:
+3. Calculates seven statistics for each tree using the `treestats` package:
    - **Colless index**: Measures tree balance
    - **Phylogenetic diversity**: Sum of all branch lengths
    - **Cherries**: Number of cherry structures (pairs of sister tips)
+   - **laplace_spectrum_principal_eigenvalue**: Principal eigenvalue of distance Laplacian matrix
+   - **laplace_spectrum_eigengap**: Eigengap position (number of modalities)
+   - **laplace_spectrum_asymmetry**: Asymmetry of eigenvalue distribution (skewness)
+   - **laplace_spectrum_peakedness**: Peakedness of spectral density distribution
 
 4. Saves all statistics to `tree_statistics.csv`. These are considered the ground truth values that the Python implementations are compared against.
 
