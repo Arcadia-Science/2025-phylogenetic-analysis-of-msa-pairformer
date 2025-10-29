@@ -1,5 +1,3 @@
-from typing import Literal
-
 import arcadia_pycolor as apc
 import matplotlib.colors as mcolors
 import numpy as np
@@ -500,10 +498,8 @@ def ridgeline_r2_plot(
                 ),
                 showlegend=False,
                 name=bin_label,
-                hovertemplate=(
-                    f"MSA depth: {bin_label}<br>Mean ± SD: "
-                    f"{mean_val:.2f} ± {std_val:.2f}<extra></extra>",
-                ),
+                hoverinfo="text",
+                text=f"MSA depth: {bin_label}<br>Mean ± SD: {mean_val:.2f} ± {std_val:.2f}",
             ),
             row=1,
             col=2,
@@ -565,7 +561,7 @@ def ridgeline_r2_plot(
     )
 
     for i, bin_label in enumerate(bins):
-        label_color = "#888888" if (i == 0 and gradient.name == "verde_r") else colors[i]
+        label_color = "black"
         fig.add_annotation(
             x=0.317,
             y=bin_offsets[i],
@@ -655,10 +651,14 @@ def ridgeline_r2_plot(
 
 def stacked_feature_importance_plot(
     df: pd.DataFrame,
-    size_col: str = "Size",
+    bin_col: str,
+    bin_edges: list[float],
+    bin_display_name: str,
+    bin_labels: list[str] | None = None,
     feature_cols: list[int] | None = None,
     gap: float = -0.78,
     gradient=None,
+    annotation_y_position: float = 0.73,
 ):
     if feature_cols is None:
         feature_cols = list(range(22))
@@ -668,262 +668,24 @@ def stacked_feature_importance_plot(
 
     df_copy = df.copy()
 
-    bin_edges = [200, 300, 400, 500, 600, 700, 800, 900, 1025]
-    bin_labels = [
-        "200-299",
-        "300-399",
-        "400-499",
-        "500-599",
-        "600-699",
-        "700-799",
-        "800-899",
-        "900-1024",
-    ]
+    if bin_labels is None:
+        bin_labels = [f"{bin_edges[i]:g}-{bin_edges[i + 1]:g}" for i in range(len(bin_edges) - 1)]
 
-    df_copy["Size Bin"] = pd.cut(df_copy[size_col], bins=bin_edges, labels=bin_labels, right=False)
-    df_copy = df_copy.dropna(subset=["Size Bin"])
-
-    actual_n_bins = len(df_copy["Size Bin"].unique())
-    colors = [c.hex_code for c in gradient.resample_as_palette(actual_n_bins)]
-
-    bins = sorted(df_copy["Size Bin"].unique())
-    feature_indices = np.arange(len(feature_cols))
-
-    all_mean_values = []
-    for bin_label in bins:
-        bin_data = df_copy[df_copy["Size Bin"] == bin_label]
-        mean_values = bin_data[feature_cols].mean().values
-        all_mean_values.append(mean_values)
-
-    all_mean_values_array = np.array(all_mean_values)
-    global_min = all_mean_values_array.min()
-    global_max = all_mean_values_array.max()
-
-    fig = go.Figure()
-
-    for i in reversed(range(len(bins))):
-        bin_label = bins[i]
-        bin_data = df_copy[df_copy["Size Bin"] == bin_label]
-
-        mean_values = bin_data[feature_cols].mean().values
-        std_values = bin_data[feature_cols].std().values
-        n_samples = len(bin_data)
-        se_values = std_values / np.sqrt(n_samples)
-
-        percentage_values = (mean_values / mean_values.sum()) * 100
-        se_percentage_values = (se_values / mean_values.sum()) * 100
-
-        if global_max > global_min:
-            scaled_values = (mean_values - global_min) / (global_max - global_min)
-        else:
-            scaled_values = np.zeros_like(mean_values)
-
-        offset = i * (1.0 + gap)
-        y_values = scaled_values + offset
-
-        hover_data = np.column_stack([percentage_values, se_percentage_values])
-
-        hex_color = colors[i].lstrip("#")
-        r, g, b = int(hex_color[0:2], 16), int(hex_color[2:4], 16), int(hex_color[4:6], 16)
-        rgba_solid = f"rgba({r},{g},{b},0.9)"
-        rgba_medium = f"rgba({r},{g},{b},0.5)"
-        rgba_transparent = f"rgba({r},{g},{b},0.0)"
-
-        line_gray_value = int(102 * (1 - i / (len(bins) - 1)))
-        line_color = f"#{line_gray_value:02x}{line_gray_value:02x}{line_gray_value:02x}"
-
-        fig.add_trace(
-            go.Scatter(
-                x=feature_indices,
-                y=np.full_like(feature_indices, offset, dtype=float),
-                mode="lines",
-                line=dict(color=colors[i], width=0),
-                showlegend=False,
-                hoverinfo="skip",
-            )
-        )
-
-        fig.add_trace(
-            go.Scatter(
-                x=feature_indices,
-                y=y_values,
-                mode="lines",
-                line=dict(color=line_color, width=2.0),
-                fill="tonexty",
-                fillgradient=dict(
-                    type="vertical",
-                    colorscale=[
-                        (0.0, rgba_transparent),
-                        (0.1, rgba_medium),
-                        (0.5, rgba_solid),
-                        (1.0, rgba_solid),
-                    ],
-                ),
-                showlegend=False,
-                hovertemplate=(
-                    f"MSA depth: {bin_label}<br>Layer: "
-                    f"%{{x}}<br>Importance: %{{customdata[0]:.1f}} "
-                    f"± %{{customdata[1]:.1f}}%<extra></extra>"
-                ),
-                customdata=hover_data,
-            )
-        )
-
-    bin_label_annotations = []
-    label_offset = 0.1
-    for i in range(len(bins)):
-        bin_label = bins[i]
-        offset = i * (1.0 + gap) + label_offset
-        hex_color = colors[i].lstrip("#")
-        label_color = "#888888" if (i == 0 and gradient.name == "verde_r") else f"#{hex_color}"
-
-        bin_label_annotations.append(
-            dict(
-                text=bin_label,
-                x=1.01,
-                y=offset,
-                xref="paper",
-                yref="y",
-                xanchor="left",
-                yanchor="middle",
-                showarrow=False,
-                font=dict(family="SuisseIntlMono", size=20, color=label_color),
-            )
-        )
-
-    y_max = (len(bins) - 1) * (1.0 + gap) + 1.0
-    num_segments = 50
-
-    shapes = []
-    for x_val in range(len(feature_cols)):
-        y_positions = np.linspace(0, y_max, num_segments + 1)
-        for j in range(num_segments):
-            y_start = y_positions[j]
-            y_end = y_positions[j + 1]
-            y_mid = (y_start + y_end) / 2
-            y_fraction = y_mid / y_max
-
-            if y_fraction <= 0.6:
-                opacity = 0.25
-            elif y_fraction <= 0.8:
-                opacity = 0.25 * (1 - (y_fraction - 0.6) / 0.2)
-            else:
-                opacity = 0.0
-
-            if opacity > 0:
-                shapes.append(
-                    dict(
-                        type="line",
-                        x0=x_val,
-                        x1=x_val,
-                        y0=y_start,
-                        y1=y_end,
-                        line=dict(color=f"rgba(128, 128, 128, {opacity})", width=1),
-                        layer="below",
-                    )
-                )
-
-    fig.update_layout(
-        xaxis=dict(
-            title=dict(text="Layer index", font=dict(size=24)),
-            tickmode="linear",
-            tick0=0,
-            dtick=1,
-            ticks="",
-            showline=False,
-            showgrid=False,
-        ),
-        yaxis=dict(
-            showticklabels=False,
-            title="",
-            ticks="",
-            showline=False,
-            showgrid=False,
-            range=[0, y_max],
-        ),
-        shapes=shapes,
-        width=800,
-        height=450,
-        plot_bgcolor=apc.white.hex_code,
-        paper_bgcolor=apc.white.hex_code,
-        showlegend=False,
-        margin=dict(l=80, r=120, t=0, b=60),
-        hoverlabel=dict(
-            bgcolor="white",
-            font_size=16,
-        ),
-        annotations=[
-            dict(
-                text="Feature importance",
-                x=-0.04,
-                y=0.36,
-                xref="paper",
-                yref="paper",
-                xanchor="center",
-                yanchor="middle",
-                showarrow=False,
-                font=dict(family="SuisseIntl-Medium", size=24),
-                textangle=-90,
-            ),
-            dict(
-                text="MSA depth",
-                x=1.01,
-                y=0.73,
-                xref="paper",
-                yref="paper",
-                xanchor="left",
-                yanchor="middle",
-                showarrow=False,
-                font=dict(family="SuisseIntl-Medium", size=18),
-                textangle=0,
-            ),
-        ]
-        + bin_label_annotations,
+    bin_column_name = f"{bin_col} Bin"
+    df_copy[bin_column_name] = pd.cut(
+        df_copy[bin_col], bins=bin_edges, labels=bin_labels, right=False
     )
+    df_copy = df_copy.dropna(subset=[bin_column_name])
 
-    apc.plotly.style_plot(fig, monospaced_axes="x")
-
-    return fig
-
-
-def stacked_feature_importance_by_r2_plot(
-    df: pd.DataFrame,
-    r2_col: str = "Adjusted R2",
-    feature_cols: list[int] | None = None,
-    gap: float = -0.78,
-    gradient=None,
-):
-    if feature_cols is None:
-        feature_cols = list(range(22))
-
-    if gradient is None:
-        gradient = apc.gradients.sunset.reverse()
-
-    df_copy = df.copy()
-
-    bin_edges = [0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0]
-    bin_labels = [
-        "0.3-0.4",
-        "0.4-0.5",
-        "0.5-0.6",
-        "0.6-0.7",
-        "0.7-0.8",
-        "0.8-0.9",
-        "0.9-1.0",
-    ]
-
-    df_copy["R2 Bin"] = pd.cut(df_copy[r2_col], bins=bin_edges, labels=bin_labels, right=False)
-    df_copy = df_copy.dropna(subset=["R2 Bin"])
-
-    actual_n_bins = len(df_copy["R2 Bin"].unique())
+    actual_n_bins = len(df_copy[bin_column_name].unique())
     colors = [c.hex_code for c in gradient.resample_as_palette(actual_n_bins)]
 
-    bins = sorted(df_copy["R2 Bin"].unique())
+    bins = sorted(df_copy[bin_column_name].unique())
     feature_indices = np.arange(len(feature_cols))
 
     all_mean_values = []
     for bin_label in bins:
-        bin_data = df_copy[df_copy["R2 Bin"] == bin_label]
+        bin_data = df_copy[df_copy[bin_column_name] == bin_label]
         mean_values = bin_data[feature_cols].mean().values
         all_mean_values.append(mean_values)
 
@@ -935,7 +697,7 @@ def stacked_feature_importance_by_r2_plot(
 
     for i in reversed(range(len(bins))):
         bin_label = bins[i]
-        bin_data = df_copy[df_copy["R2 Bin"] == bin_label]
+        bin_data = df_copy[df_copy[bin_column_name] == bin_label]
 
         mean_values = bin_data[feature_cols].mean().values
         std_values = bin_data[feature_cols].std().values
@@ -993,7 +755,7 @@ def stacked_feature_importance_by_r2_plot(
                 ),
                 showlegend=False,
                 hovertemplate=(
-                    f"Adjusted R²: {bin_label}<br>Layer: "
+                    f"{bin_display_name}: {bin_label}<br>Layer: "
                     f"%{{x}}<br>Importance: %{{customdata[0]:.1f}} "
                     f"± %{{customdata[1]:.1f}}%<extra></extra>"
                 ),
@@ -1006,8 +768,6 @@ def stacked_feature_importance_by_r2_plot(
     for i in range(len(bins)):
         bin_label = bins[i]
         offset = i * (1.0 + gap) + label_offset
-        hex_color = colors[i].lstrip("#")
-        label_color = "#888888" if (i == 0 and gradient.name == "verde_r") else f"#{hex_color}"
 
         bin_label_annotations.append(
             dict(
@@ -1019,7 +779,7 @@ def stacked_feature_importance_by_r2_plot(
                 xanchor="left",
                 yanchor="middle",
                 showarrow=False,
-                font=dict(family="SuisseIntlMono", size=20, color=label_color),
+                font=dict(family="SuisseIntlMono", size=20, color="black"),
             )
         )
 
@@ -1098,9 +858,9 @@ def stacked_feature_importance_by_r2_plot(
                 textangle=-90,
             ),
             dict(
-                text="Adjusted R²",
+                text=bin_display_name,
                 x=1.01,
-                y=0.70,
+                y=annotation_y_position,
                 xref="paper",
                 yref="paper",
                 xanchor="left",
