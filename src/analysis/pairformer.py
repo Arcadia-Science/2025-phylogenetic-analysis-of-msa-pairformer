@@ -73,7 +73,7 @@ def run_inference(
     gpu="H100",
 )
 def calculate_sequence_weights(msas: dict[str, MSA]) -> dict[str, torch.Tensor]:
-    """Calculate sequence attention weights for multiple MSAs in a single batch.
+    """Calculate sequence bias weights for multiple MSAs.
 
     This function will execute on local hardware if the environmental variable
     `USE_MODAL=0` or is unset, and will execute remotely on Modal if `USE_MODAL=1`
@@ -94,7 +94,8 @@ def calculate_sequence_weights(msas: dict[str, MSA]) -> dict[str, torch.Tensor]:
 
     Returns:
         dict[str, torch.Tensor]:
-            Dictionary mapping MSA identifiers to their sequence attention weights on CPU.
+            Dictionary mapping MSA identifiers to their sequence attention weights on
+            CPU.
     """
     device = "cuda" if torch.cuda.is_available() else "cpu"
     model = MSAPairformer.from_pretrained(device=device)
@@ -111,3 +112,51 @@ def calculate_sequence_weights(msas: dict[str, MSA]) -> dict[str, torch.Tensor]:
             seq_weights_dict[msa_id] = get_sequence_weight_data(model_output).cpu()
 
     return seq_weights_dict
+
+
+@runnable_on_modal(
+    app_name="msa-pairformer-cb-contacts",
+    base_image=image,
+    volumes={"/data": volume},
+    timeout=36000,
+    enable_output=False,
+    gpu="H100",
+)
+def calculate_cb_contacts(msas: dict[str, MSA]) -> dict[str, torch.Tensor]:
+    """Calculate beta-carbon contacts for multiple MSAs.
+
+    This function will execute on local hardware if the environmental variable
+    `USE_MODAL=0` or is unset, and will execute remotely on Modal if `USE_MODAL=1`
+    (requires modal credentials).
+
+    This function is designed for processing many MSAs for the narrow use case of
+    extracting and returning beta carbon contact prediction (a small amount of data per
+    MSA) rather than full model outputs.
+
+    Implemented to provide a consistent interface regardless of the
+    execution environment (Modal or local).
+
+    Currently, each forward pass contains a single MSA. Performance could be optimized
+    by batching.
+
+    Args:
+        msas: Dictionary mapping MSA identifiers to MSA objects
+
+    Returns:
+        dict[str, torch.Tensor]:
+            Dictionary mapping MSA identifiers to their sequence attention weights on
+            CPU.
+    """
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    model = MSAPairformer.from_pretrained(device=device)
+
+    cb_contacts_dict = {}
+    with torch.no_grad(), autocast(dtype=torch.bfloat16, device_type=device):
+        for msa_id, msa in progress(msas.items(), desc="Running forward passes through the model"):
+            cb_contacts = model.predict_cb_contacts(
+                **get_model_input_data(msa, torch.device(device)),
+            )["predicted_cb_contacts"]
+
+            cb_contacts_dict[msa_id] = cb_contacts.cpu()
+
+    return cb_contacts_dict

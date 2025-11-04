@@ -9,7 +9,7 @@ import modal
 
 image = (
     modal.Image.debian_slim(python_version="3.10")
-    .pip_install(["huggingface-hub==0.35.1", "msa-pairformer==1.0.1"])
+    .pip_install(["huggingface-hub==0.35.1", "msa-pairformer==1.0.1", "rich==14.2.0"])
     .env({"HF_HOME": "/data"})
     .add_local_python_source("analysis")
 )

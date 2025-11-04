@@ -84,3 +84,6 @@ testpaths = ["tests"]
 filterwarnings = [
   "ignore::DeprecationWarning",
 ]
+
+[tool.jupytext]
+formats = "ipynb,md"
