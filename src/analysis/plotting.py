@@ -389,11 +389,14 @@ def interactive_layer_weight_plot(
 
 def ridgeline_r2_plot(
     df: pd.DataFrame,
-    size_col: str = "Size",
+    bin_col: str = "MSA Depth",
     y_col: str = "Adjusted R2",
     gradient=None,
     bw_adjust: float = 0.11,
     gap: float = 0.7,
+    bin_edges: list[float] | None = None,
+    bin_labels: list[str] | None = None,
+    n_bins: int = 8,
 ):
     from scipy.stats import gaussian_kde
 
@@ -402,25 +405,30 @@ def ridgeline_r2_plot(
 
     df_copy = df.copy()
 
-    bin_edges = [200, 300, 400, 500, 600, 700, 800, 900, 1025]
-    bin_labels = [
-        "200-299",
-        "300-399",
-        "400-499",
-        "500-599",
-        "600-699",
-        "700-799",
-        "800-899",
-        "900-1024",
-    ]
+    if bin_edges is None:
+        if bin_col == "MSA Depth":
+            bin_edges = [200, 300, 400, 500, 600, 700, 800, 900, 1025]
+        else:
+            quantiles = np.linspace(0, 1, n_bins + 1)
+            bin_edges = df_copy[bin_col].quantile(quantiles).tolist()
 
-    df_copy["Size Bin"] = pd.cut(df_copy[size_col], bins=bin_edges, labels=bin_labels, right=False)
-    df_copy = df_copy.dropna(subset=["Size Bin"])
+    if bin_labels is None:
+        if bin_col == "MSA Depth":
+            bin_labels = [
+                f"{bin_edges[i]:g}-{bin_edges[i + 1] - 1:g}" for i in range(len(bin_edges) - 1)
+            ]
+        else:
+            bin_labels = [
+                f"{bin_edges[i]:g}-{bin_edges[i + 1]:g}" for i in range(len(bin_edges) - 1)
+            ]
 
-    actual_n_bins = len(df_copy["Size Bin"].unique())
+    df_copy["Bin"] = pd.cut(df_copy[bin_col], bins=bin_edges, labels=bin_labels, right=False)
+    df_copy = df_copy.dropna(subset=["Bin"])
+
+    actual_n_bins = len(df_copy["Bin"].unique())
     colors = [c.hex_code for c in gradient.resample_as_palette(actual_n_bins)]
 
-    bins = sorted(df_copy["Size Bin"].unique())
+    bins = sorted(df_copy["Bin"].unique())
 
     fig = make_subplots(
         rows=1,
@@ -440,8 +448,8 @@ def ridgeline_r2_plot(
     for i, bin_label in enumerate(bins):
         offset = i * gap
         bin_offsets.append(offset)
-        bin_counts.append(len(df_copy[df_copy["Size Bin"] == bin_label]))
-        bin_data = df_copy[df_copy["Size Bin"] == bin_label]
+        bin_counts.append(len(df_copy[df_copy["Bin"] == bin_label]))
+        bin_data = df_copy[df_copy["Bin"] == bin_label]
         values = bin_data[y_col].values
 
         mean_val = values.mean() if len(values) > 0 else 0
@@ -499,7 +507,7 @@ def ridgeline_r2_plot(
                 showlegend=False,
                 name=bin_label,
                 hoverinfo="text",
-                text=f"MSA depth: {bin_label}<br>Mean ± SD: {mean_val:.2f} ± {std_val:.2f}",
+                text=f"{bin_col}: {bin_label}<br>Mean ± SD: {mean_val:.2f} ± {std_val:.2f}",
             ),
             row=1,
             col=2,
@@ -579,7 +587,7 @@ def ridgeline_r2_plot(
         y=0.86,
         xref="paper",
         yref="paper",
-        text="MSA depth",
+        text=bin_col,
         showarrow=False,
         font=dict(size=22, color="black", family="SuisseIntl-Medium"),
         xanchor="center",

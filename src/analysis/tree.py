@@ -262,10 +262,6 @@ def phylogenetic_diversity_statistic(tree: Tree) -> float:
     return total
 
 
-def tree_size(tree: Tree) -> int:
-    return len(tree.get_leaves())
-
-
 def distance_laplacian_spectrum(tree: Tree) -> dict[str, np.ndarray | float]:
     """Calculate distance Laplacian spectrum statistics.
 
@@ -331,31 +327,8 @@ def distance_laplacian_spectrum(tree: Tree) -> dict[str, np.ndarray | float]:
     }
 
 
-def root_to_tip_distances(tree: Tree) -> np.ndarray:
-    """Get distances from root to all tips.
-
-    Args:
-        tree: The phylogenetic tree
-
-    Returns:
-        Array of distances from root to each tip
-    """
+def _root_to_tip_distances(tree: Tree) -> np.ndarray:
     return np.array([tree.get_distance(leaf) for leaf in tree.get_leaves()])
-
-
-def ultrametricity_std(tree: Tree) -> float:
-    """Calculate standard deviation of root-to-tip distances.
-
-    Perfect ultrametric trees have std = 0.
-
-    Args:
-        tree: The phylogenetic tree
-
-    Returns:
-        Standard deviation of root-to-tip distances
-    """
-    distances = root_to_tip_distances(tree)
-    return float(np.std(distances, ddof=1))
 
 
 def ultrametricity_cv(tree: Tree) -> float:
@@ -369,61 +342,21 @@ def ultrametricity_cv(tree: Tree) -> float:
     Returns:
         Coefficient of variation (std / mean) of root-to-tip distances
     """
-    distances = root_to_tip_distances(tree)
+    distances = _root_to_tip_distances(tree)
     mean_dist = np.mean(distances)
     std_dist = np.std(distances, ddof=1)
-    return float(std_dist / mean_dist) if mean_dist > 0 else 0.0
+    return float(std_dist / mean_dist)
 
 
 # --- Query-centric metrics
 
 
-def get_distance_quartiles(tree: Tree, reference: str) -> dict[str, int]:
-    """Get quartile assignments for all leaves based on distance from reference.
-
-    Args:
-        tree: The phylogenetic tree
-        reference: Identifier substring to match the reference leaf node
-
-    Returns:
-        Dictionary mapping leaf names to quartile numbers (1, 2, 3, or 4)
-    """
-    distances = get_patristic_distance(tree, reference)
-    sorted_distances = distances.sort_values()
-
-    n = len(sorted_distances)
-    quartile_map = {}
-
-    for i, leaf_name in enumerate(sorted_distances.index):
-        if i < n / 4:
-            quartile_map[leaf_name] = 1
-        elif i < n / 2:
-            quartile_map[leaf_name] = 2
-        elif i < 3 * n / 4:
-            quartile_map[leaf_name] = 3
-        else:
-            quartile_map[leaf_name] = 4
-
-    return quartile_map
-
-
-def normalized_q1_patristic(tree: Tree, reference: str) -> float:
-    quartiles = get_distance_quartiles(tree, reference)
-    distances = get_patristic_distance(tree, reference)
-    q1_distances = [distances[leaf] for leaf, q in quartiles.items() if q == 1]
-
-    return np.sum(q1_distances) / np.sum(distances.values)
-
-
-def patristic_cv(tree: Tree, reference: str) -> float:
-    distances = get_patristic_distance(tree, reference).values
-    return distances.std() / distances.mean()
-
 def patristic_std(tree: Tree, reference: str) -> float:
     distances = get_patristic_distance(tree, reference).values
     return distances.std()
 
-def query_centrality_normalized(tree: Tree, reference: str) -> float:
+
+def query_centrality(tree: Tree, reference: str) -> float:
     """Calculate normalized centrality of query in tree topology.
 
     This metric measures whether the query is in the center or periphery of the
@@ -451,175 +384,3 @@ def query_centrality_normalized(tree: Tree, reference: str) -> float:
     mean_pairwise_distance = np.mean(pairwise_distances)
 
     return mean_query_distance / mean_pairwise_distance
-
-
-def distance_gradient_smoothness(tree: Tree, reference: str) -> float:
-    """Calculate smoothness of distance gradient across quartiles.
-
-    This metric uses Spearman correlation to measure how predictably distance
-    increases with quartile rank. Values near 1 indicate smooth, predictable
-    structure; lower values indicate jumps or irregularities.
-
-    Args:
-        tree: The phylogenetic tree
-        reference: Identifier substring to match the reference leaf node
-
-    Returns:
-        Spearman correlation between quartile number and mean distance
-    """
-    distances = get_patristic_distance(tree, reference)
-    quartiles = get_distance_quartiles(tree, reference)
-
-    quartile_means = []
-    quartile_numbers = []
-
-    for q in [1, 2, 3, 4]:
-        q_distances = [distances[leaf] for leaf, quartile in quartiles.items() if quartile == q]
-        if q_distances:
-            quartile_means.append(np.mean(q_distances))
-            quartile_numbers.append(q)
-
-    if len(quartile_numbers) < 2:
-        return 1.0
-
-    correlation, _ = stats.spearmanr(quartile_numbers, quartile_means)
-    return correlation
-
-
-def q1_internal_variance_normalized(tree: Tree, reference: str) -> float:
-    """Calculate normalized variance of patristic distances within Q1.
-
-    This metric measures how evenly spread the closest neighbors are.
-    Lower values indicate a tight, uniform cluster; higher values indicate
-    dispersed or unevenly distributed neighbors.
-
-    Args:
-        tree: The phylogenetic tree
-        reference: Identifier substring to match the reference leaf node
-
-    Returns:
-        Variance of Q1 distances normalized by variance across all members
-    """
-    distances = get_patristic_distance(tree, reference)
-    quartiles = get_distance_quartiles(tree, reference)
-
-    q1_distances = [distances[leaf] for leaf, q in quartiles.items() if q == 1]
-
-    q1_var = np.var(q1_distances, ddof=1) if len(q1_distances) > 1 else 0.0
-    all_var = np.var(distances.values, ddof=1) if len(distances) > 1 else 1.0
-
-    return q1_var / all_var if all_var > 0 else 0.0
-
-
-def quartile_gap_ratio(tree: Tree, reference: str) -> float:
-    """Calculate ratio of Q1-Q2 gap to full distance range.
-
-    This metric measures how steep the distance gradient is near the query
-    compared to the overall range. Higher values indicate a sharp local
-    gradient with clear neighborhood boundaries.
-
-    Args:
-        tree: The phylogenetic tree
-        reference: Identifier substring to match the reference leaf node
-
-    Returns:
-        (mean Q2 - mean Q1) / (mean Q4 - mean Q1)
-    """
-    distances = get_patristic_distance(tree, reference)
-    quartiles = get_distance_quartiles(tree, reference)
-
-    q1_distances = [distances[leaf] for leaf, q in quartiles.items() if q == 1]
-    q2_distances = [distances[leaf] for leaf, q in quartiles.items() if q == 2]
-    q4_distances = [distances[leaf] for leaf, q in quartiles.items() if q == 4]
-
-    mean_q1 = np.mean(q1_distances)
-    mean_q2 = np.mean(q2_distances)
-    mean_q4 = np.mean(q4_distances)
-
-    denominator = mean_q4 - mean_q1
-    return (mean_q2 - mean_q1) / denominator if denominator > 0 else 0.0
-
-
-def q1_max_min_ratio(tree: Tree, reference: str) -> float:
-    """Calculate ratio of maximum to minimum distance within Q1.
-
-    This metric captures the dynamic range within the closest neighborhood.
-    Higher values indicate heterogeneous local structure with both very close
-    and moderately distant neighbors in Q1.
-
-    Args:
-        tree: The phylogenetic tree
-        reference: Identifier substring to match the reference leaf node
-
-    Returns:
-        Max Q1 distance / Min Q1 distance
-    """
-    distances = get_patristic_distance(tree, reference)
-    quartiles = get_distance_quartiles(tree, reference)
-
-    q1_distances = [distances[leaf] for leaf, q in quartiles.items() if q == 1]
-
-    if not q1_distances:
-        return 1.0
-
-    min_dist = min(q1_distances)
-    max_dist = max(q1_distances)
-
-    return max_dist / min_dist if min_dist > 0 else 1.0
-
-
-def q1_depth_variance_normalized(tree: Tree, reference: str) -> float:
-    """Calculate normalized variance of root-to-tip distances for Q1 members.
-
-    This metric tests whether close relatives have similar evolutionary "ages"
-    (ultrametricity). Lower values indicate Q1 members are at similar depths;
-    higher values indicate rate variation or age heterogeneity.
-
-    Args:
-        tree: The phylogenetic tree
-        reference: Identifier substring to match the reference leaf node
-
-    Returns:
-        Variance of Q1 root-to-tip distances / Variance for all members
-    """
-    quartiles = get_distance_quartiles(tree, reference)
-    q1_leaves = [leaf for leaf, q in quartiles.items() if q == 1]
-
-    all_leaves = list(tree.get_leaves())
-
-    q1_depths = [tree.get_distance(leaf) for leaf in all_leaves if leaf.name in q1_leaves]
-    all_depths = [tree.get_distance(leaf) for leaf in all_leaves]
-
-    q1_var = np.var(q1_depths, ddof=1) if len(q1_depths) > 1 else 0.0
-    all_var = np.var(all_depths, ddof=1) if len(all_depths) > 1 else 1.0
-
-    return q1_var / all_var if all_var > 0 else 0.0
-
-
-def q1_subtree_colless_normalized(tree: Tree, reference: str) -> float:
-    """Calculate normalized Colless index for the Q1 subtree.
-
-    This metric measures tree balance specifically among close neighbors.
-    It computes the Colless statistic on the minimal subtree containing Q1
-    members, normalized by the full tree's Colless index.
-
-    Args:
-        tree: The phylogenetic tree
-        reference: Identifier substring to match the reference leaf node
-
-    Returns:
-        Colless index of Q1 subtree / Colless index of full tree
-    """
-    quartiles = get_distance_quartiles(tree, reference)
-    q1_leaves = [leaf for leaf, q in quartiles.items() if q == 1]
-
-    if len(q1_leaves) < 3:
-        return 0.0
-
-    q1_subtree = tree.copy()
-    q1_subtree.prune(q1_leaves)
-
-    q1_colless = colless_statistic(q1_subtree)
-    full_colless = colless_statistic(tree)
-
-    return q1_colless / full_colless if full_colless > 0 else 0.0
