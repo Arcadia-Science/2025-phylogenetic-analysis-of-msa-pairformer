@@ -331,6 +331,33 @@ def _root_to_tip_distances(tree: Tree) -> np.ndarray:
     return np.array([tree.get_distance(leaf) for leaf in tree.get_leaves()])
 
 
+def get_root_to_tip_distances(tree: Tree) -> pd.Series:
+    leaves = tree.get_leaves()
+    distances = {leaf.name: tree.get_distance(leaf) for leaf in leaves}
+    return pd.Series(distances)
+
+
+def gap_fraction(tree: Tree) -> float:
+    """Calculate the normalized gap statistic for root-to-tip distances.
+
+    Sorts root-to-tip distances and finds the largest gap between consecutive values,
+    normalized by the total range. Large values suggest distinct groups of leaves at
+    different distances from the root.
+
+    Args:
+        tree: The phylogenetic tree
+
+    Returns:
+        Normalized gap (max gap / range), where 0 = no separation, 1 = complete separation
+    """
+    distances = _root_to_tip_distances(tree)
+    sorted_distances = np.sort(distances)
+    gaps = np.diff(sorted_distances)
+    max_gap = np.max(gaps)
+    distance_range = sorted_distances[-1] - sorted_distances[0]
+    return float(max_gap / distance_range) if distance_range > 0 else 0.0
+
+
 def ultrametricity_cv(tree: Tree) -> float:
     """Calculate coefficient of variation of root-to-tip distances.
 
@@ -354,6 +381,11 @@ def ultrametricity_cv(tree: Tree) -> float:
 def patristic_std(tree: Tree, reference: str) -> float:
     distances = get_patristic_distance(tree, reference).values
     return distances.std()
+
+
+def patristic_mean(tree: Tree, reference: str) -> float:
+    distances = get_patristic_distance(tree, reference).values
+    return distances.mean()
 
 
 def query_centrality(tree: Tree, reference: str) -> float:

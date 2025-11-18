@@ -77,28 +77,44 @@ def regress_and_analyze_features(
 
 
 if __name__ == "__main__":
-    # --- Example Usage ---
-    # Generate some sample data for demonstration
+    import matplotlib.pyplot as plt
+
     num_samples = 150
     num_features = 22
     np.random.seed(42)
 
-    # Create some features, making a few of them genuinely important
     X_data = np.random.rand(num_samples, num_features)
     y_data = (
-        3.5 * X_data[:, 2]  # Feature 2 is very important
-        - 2.1 * X_data[:, 10]  # Feature 10 is important
-        + 0.8 * X_data[:, 15]  # Feature 15 is somewhat important
-        + np.random.randn(num_samples) * 2  # Add noise
+        3.5 * X_data[:, 2]
+        - 2.1 * X_data[:, 10]
+        + 0.8 * X_data[:, 15]
+        + np.random.randn(num_samples) * 2
     )
 
-    # Call the new function
     model, anova_importance = regress_and_analyze_features(X_data, y_data)
 
-    # Print the results
-    print(f"Raw R-squared: {model.rsquared:.4f}")
-    print(f"Adjusted R-squared: {model.rsquared_adj:.4f}")
-    print(f"Intercept: {model.params[0]:.10f}\n")
+    print(f"R²: {model.rsquared:.4f}")
+    print(f"Adjusted R²: {model.rsquared_adj:.4f}\n")
 
     print("--- Type III ANOVA Feature Importance ---")
     print(anova_importance.sort_values(by="F", ascending=False).round(4))
+
+    y_pred = model.fittedvalues
+    y_actual = model.model.endog
+
+    fig, ax = plt.subplots(figsize=(8, 8))
+    ax.scatter(y_actual, y_pred, alpha=0.5, s=50)
+
+    min_val = min(y_actual.min(), y_pred.min())
+    max_val = max(y_actual.max(), y_pred.max())
+    ax.plot([min_val, max_val], [min_val, max_val], 'r--', lw=2, label='1:1 line')
+
+    ax.set_xlabel('Actual Values', fontsize=12)
+    ax.set_ylabel('Predicted Values', fontsize=12)
+    ax.set_title(f'Predicted vs Actual\nR² = {model.rsquared:.4f}', fontsize=14)
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    ax.set_aspect('equal', adjustable='box')
+
+    plt.tight_layout()
+    plt.show()
