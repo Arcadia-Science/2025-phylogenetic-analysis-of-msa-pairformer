@@ -358,6 +358,56 @@ def gap_fraction(tree: Tree) -> float:
     return float(max_gap / distance_range) if distance_range > 0 else 0.0
 
 
+def has_monophyletic_outlier(tree: Tree, threshold: float = 0.4, max_fraction: float = 0.1) -> bool:
+    """Check if there's a monophyletic clade of outlier tips based on root-to-tip distance gaps.
+
+    Identifies large gaps in sorted root-to-tip distances and determines if tips beyond
+    each gap form a monophyletic group, which may indicate a problematic divergent clade.
+
+    Args:
+        tree: The phylogenetic tree
+        threshold: Minimum gap size as fraction of max root-to-tip distance
+        max_fraction: Maximum fraction of total tips allowed in the outlier clade
+
+    Returns:
+        True if any gap separates a monophyletic outlier clade with <= max_fraction of tips, False otherwise
+    """
+    distances = get_root_to_tip_distances(tree)
+    sorted_distances = distances.sort_values()
+
+    max_distance = sorted_distances.max()
+    threshold_distance = threshold * max_distance
+
+    sorted_tips = sorted_distances.index.tolist()
+    sorted_values = sorted_distances.values
+
+    total_tips = len(sorted_tips)
+    max_outlier_count = int(max_fraction * total_tips)
+
+    for i in range(len(sorted_values) - 1):
+        gap = sorted_values[i + 1] - sorted_values[i]
+
+        if gap > threshold_distance:
+            outlier_tips = sorted_tips[i + 1:]
+
+            if len(outlier_tips) > max_outlier_count:
+                continue
+
+            if len(outlier_tips) == 1:
+                return True
+            elif len(outlier_tips) > 1:
+                outlier_leaves = [leaf for leaf in tree.get_leaves() if leaf.name in outlier_tips]
+
+                common_ancestor = tree.get_common_ancestor(outlier_leaves)
+
+                clade_tips = {leaf.name for leaf in common_ancestor.get_leaves()}
+
+                if clade_tips == set(outlier_tips):
+                    return True
+
+    return False
+
+
 def ultrametricity_cv(tree: Tree) -> float:
     """Calculate coefficient of variation of root-to-tip distances.
 
