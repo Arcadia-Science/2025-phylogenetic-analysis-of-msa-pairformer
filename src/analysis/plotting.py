@@ -1,13 +1,20 @@
 import arcadia_pycolor as apc
 import matplotlib.colors as mcolors
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
+import torch
 from arcadia_pycolor.gradient import Gradient
-from arcadia_pycolor.style_defaults import DEFAULT_FONT
-from ete3 import NodeStyle, TextFace, TreeStyle
+from arcadia_pycolor.style_defaults import DEFAULT_FONT, MONOSPACE_FONT
+from ete3 import NodeStyle, TextFace, Tree, TreeStyle
 from plotly.subplots import make_subplots
+from scipy.stats import spearmanr
+
+from analysis.regression import regress_and_analyze_features
+from analysis.tree import get_patristic_distance, read_newick
+from MSA_Pairformer.dataset import MSA
 
 # Set Plotly renderer for Quarto compatibility
 pio.renderers.default = "plotly_mimetype+notebook_connected"
@@ -33,14 +40,15 @@ def gradient_from_listed_colormap(
 def tree_style_with_highlights(
     highlight: list[str] | None = None,
     highlight_color: str = "#FF6B6B",
+    line_width: int = 2,
 ) -> TreeStyle:
     if highlight is None:
         highlight = []
 
     def layout(node):
         node_style = NodeStyle()
-        node_style["hz_line_width"] = 2
-        node_style["vt_line_width"] = 2
+        node_style["hz_line_width"] = line_width
+        node_style["vt_line_width"] = line_width
         node_style["hz_line_color"] = "#666666"
         node_style["vt_line_color"] = "#666666"
 
@@ -61,7 +69,7 @@ def tree_style_with_highlights(
             else:
                 node_style["shape"] = "circle"
                 node_style["size"] = 8
-                node_style["fgcolor"] = "#CCCCCC"
+                node_style["fgcolor"] = "#666666"
 
         node.set_style(node_style)
 
@@ -882,5 +890,63 @@ def stacked_feature_importance_plot(
     )
 
     apc.plotly.style_plot(fig, monospaced_axes="x")
+
+    return fig
+
+
+def visualize_expected_vs_actual(
+    tree: Tree,
+    msa: MSA,
+    weights: torch.Tensor,
+    query: str,
+    color_map: dict[str, str] | None = None,
+):
+    tree = tree.copy()
+    dist_to_query = get_patristic_distance(tree, query)[msa.ids_l].values
+    dist_to_query = dist_to_query[dist_to_query > 0]
+    weights = weights.clone()[1:, :]
+    model, _ = regress_and_analyze_features(weights, dist_to_query)
+
+    y_pred = model.fittedvalues
+    y_actual = model.model.endog
+    rho, _ = spearmanr(y_pred, y_actual)
+
+    fig, ax = plt.subplots()
+
+    min_val = min(y_actual.min(), y_pred.min())
+    max_val = max(y_actual.max(), y_pred.max())
+    ax.plot([min_val, max_val], [min_val, max_val], "k-", lw=1)
+
+    if color_map is not None:
+        ids = [id for id in msa.ids_l if id in color_map]
+        colors = [color_map[id] for id in ids]
+        ax.scatter(y_actual, y_pred, c=colors, alpha=0.7, s=50)
+    else:
+        ax.scatter(y_actual, y_pred, alpha=0.7, s=50)
+
+    ax.set_xlabel("Actual (standard normalized)")
+    ax.set_ylabel("Predicted (standard normalized)")
+    ax.set_aspect("equal", adjustable="box")
+
+    apc.mpl.style_plot(ax, monospaced_axes="both")
+
+    annotation_text = (
+        f"R²: {model.rsquared:.3f}\nR² Adjusted: {model.rsquared_adj:.3f}\nSpearman: {rho:.3f}"
+    )
+    ax.text(
+        0.05,
+        0.95,
+        annotation_text,
+        transform=ax.transAxes,
+        fontsize=10,
+        fontfamily=MONOSPACE_FONT,
+        verticalalignment="top",
+        bbox=dict(
+            facecolor="#FFFFFF",
+            edgecolor="#444444",
+            linewidth=1.0,
+            alpha=0.8,
+        ),
+    )
 
     return fig

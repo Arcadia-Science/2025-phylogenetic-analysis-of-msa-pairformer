@@ -92,18 +92,29 @@ def build_distance_matrix(tree: Tree) -> np.ndarray:
     return dist_matrix
 
 
-def subset_tree(tree: Tree, n: int, force_include: list[str] | None = None, seed=42) -> Tree:
+def subset_tree(
+    tree: Tree,
+    n: int,
+    force_include: list[str] | None = None,
+    force_exclude: list[str] | None = None,
+    seed=42,
+) -> Tree:
     random.seed(seed)
 
     if force_include is None:
         force_include = []
+
+    if force_exclude is None:
+        force_exclude = []
 
     all_leaves = [leaf.name for leaf in tree.get_leaves()]
 
     if n > len(all_leaves):
         n = len(all_leaves)
 
-    available_leaves = [leaf for leaf in all_leaves if leaf not in force_include]
+    available_leaves = [
+        leaf for leaf in all_leaves if leaf not in force_include and leaf not in force_exclude
+    ]
     n_random = n - len(force_include)
 
     if n_random < 0:
@@ -214,6 +225,46 @@ def sort_tree_by_reference(tree: Tree, reference: str) -> Tree:
             node.children = sorted(node.children, key=get_min_distance)
 
     return sorted_tree
+
+
+def find_outliers_in_tree(tree: Tree, gap_threshold: float, max_clade_fraction: float) -> list[str]:
+    """Identify outlier tips in a tree based on root-to-tip distance gaps.
+
+    Sorts tips by root-to-tip distance and identifies outlier clades by detecting large
+    gaps in the sorted sequence. A gap is considered significant if it exceeds
+    gap_threshold * max_distance, and the outlier clade contains at most
+    max_clade_fraction * total_tips sequences.
+
+    Args:
+        gap_threshold: Minimum gap size as fraction of maximum root-to-tip distance.
+        max_clade_fraction: Maximum fraction of total tips that can be marked as outliers.
+
+    Returns:
+        List of tip IDs identified as outliers
+    """
+    distances = get_root_to_tip_distances(tree)
+    sorted_distances = distances.sort_values()
+
+    max_distance = sorted_distances.max()
+    threshold_distance = gap_threshold * max_distance
+
+    sorted_tips = sorted_distances.index.tolist()
+    sorted_values = sorted_distances.values
+
+    total_tips = len(sorted_tips)
+    max_outlier_count = int(max_clade_fraction * total_tips)
+
+    tree_outlier_ids = []
+    for i in range(len(sorted_values) - 1):
+        gap = sorted_values[i + 1] - sorted_values[i]
+
+        if gap > threshold_distance:
+            outlier_tips = sorted_tips[i + 1 :]
+
+            if len(outlier_tips) <= max_outlier_count:
+                tree_outlier_ids.extend(outlier_tips)
+
+    return tree_outlier_ids
 
 
 # --- Global tree statistics
@@ -335,77 +386,6 @@ def get_root_to_tip_distances(tree: Tree) -> pd.Series:
     leaves = tree.get_leaves()
     distances = {leaf.name: tree.get_distance(leaf) for leaf in leaves}
     return pd.Series(distances)
-
-
-def gap_fraction(tree: Tree) -> float:
-    """Calculate the normalized gap statistic for root-to-tip distances.
-
-    Sorts root-to-tip distances and finds the largest gap between consecutive values,
-    normalized by the total range. Large values suggest distinct groups of leaves at
-    different distances from the root.
-
-    Args:
-        tree: The phylogenetic tree
-
-    Returns:
-        Normalized gap (max gap / range), where 0 = no separation, 1 = complete separation
-    """
-    distances = _root_to_tip_distances(tree)
-    sorted_distances = np.sort(distances)
-    gaps = np.diff(sorted_distances)
-    max_gap = np.max(gaps)
-    distance_range = sorted_distances[-1] - sorted_distances[0]
-    return float(max_gap / distance_range) if distance_range > 0 else 0.0
-
-
-def has_monophyletic_outlier(tree: Tree, threshold: float = 0.4, max_fraction: float = 0.1) -> bool:
-    """Check if there's a monophyletic clade of outlier tips based on root-to-tip distance gaps.
-
-    Identifies large gaps in sorted root-to-tip distances and determines if tips beyond
-    each gap form a monophyletic group, which may indicate a problematic divergent clade.
-
-    Args:
-        tree: The phylogenetic tree
-        threshold: Minimum gap size as fraction of max root-to-tip distance
-        max_fraction: Maximum fraction of total tips allowed in the outlier clade
-
-    Returns:
-        True if any gap separates a monophyletic outlier clade with <= max_fraction of tips, False otherwise
-    """
-    distances = get_root_to_tip_distances(tree)
-    sorted_distances = distances.sort_values()
-
-    max_distance = sorted_distances.max()
-    threshold_distance = threshold * max_distance
-
-    sorted_tips = sorted_distances.index.tolist()
-    sorted_values = sorted_distances.values
-
-    total_tips = len(sorted_tips)
-    max_outlier_count = int(max_fraction * total_tips)
-
-    for i in range(len(sorted_values) - 1):
-        gap = sorted_values[i + 1] - sorted_values[i]
-
-        if gap > threshold_distance:
-            outlier_tips = sorted_tips[i + 1:]
-
-            if len(outlier_tips) > max_outlier_count:
-                continue
-
-            if len(outlier_tips) == 1:
-                return True
-            elif len(outlier_tips) > 1:
-                outlier_leaves = [leaf for leaf in tree.get_leaves() if leaf.name in outlier_tips]
-
-                common_ancestor = tree.get_common_ancestor(outlier_leaves)
-
-                clade_tips = {leaf.name for leaf in common_ancestor.get_leaves()}
-
-                if clade_tips == set(outlier_tips):
-                    return True
-
-    return False
 
 
 def ultrametricity_cv(tree: Tree) -> float:
