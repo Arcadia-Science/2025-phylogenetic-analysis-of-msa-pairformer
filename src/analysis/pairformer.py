@@ -85,7 +85,10 @@ def run_inference(
     gpu="H100",
 )
 def calculate_sequence_weights(
-    msas: dict[str, MSA], query_biasing: bool = True
+    msas: dict[str, MSA],
+    query_biasing: bool = True,
+    shuffled: bool = False,
+    shuffled_layers: list[int] | None = None,
 ) -> dict[str, torch.Tensor]:
     """Calculate sequence bias weights for multiple MSAs.
 
@@ -120,6 +123,9 @@ def calculate_sequence_weights(
     if not query_biasing:
         model.turn_off_query_biasing()
 
+    if shuffled:
+        apply_shuffling_patch(model, shuffled_layers)
+
     seq_weights_dict = {}
     with torch.no_grad(), autocast(dtype=torch.bfloat16, device_type=device):
         for msa_id, msa in progress(msas.items(), desc="Running forward passes through the model"):
@@ -143,7 +149,10 @@ def calculate_sequence_weights(
     gpu="H100",
 )
 def calculate_cb_contacts(
-    msas: dict[str, MSA], query_biasing: bool = True
+    msas: dict[str, MSA],
+    query_biasing: bool = True,
+    shuffled: bool = False,
+    shuffled_layers: list[int] | None = None,
 ) -> dict[str, torch.Tensor]:
     """Calculate beta-carbon contacts for multiple MSAs.
 
@@ -178,6 +187,9 @@ def calculate_cb_contacts(
     if not query_biasing:
         model.turn_off_query_biasing()
 
+    if shuffled:
+        apply_shuffling_patch(model, shuffled_layers)
+
     cb_contacts_dict = {}
     with torch.no_grad(), autocast(dtype=torch.bfloat16, device_type=device):
         for msa_id, msa in progress(msas.items(), desc="Running forward passes through the model"):
@@ -190,7 +202,7 @@ def calculate_cb_contacts(
     return cb_contacts_dict
 
 
-def patched_opm_forward(
+def _patched_opm_forward(
     self: PresoftmaxDifferentialOuterProductMean,
     msa: Float["b s n d"],
     mask: Bool["b n"] | None = None,
@@ -315,14 +327,14 @@ def apply_shuffling_patch(model: MSAPairformer, layer_indices: list[int] | None 
     patch_count = 0
     layers = model.core_stack.layers
     for opm_instance in _get_outer_product_instances(layers, layer_indices):
-        opm_instance.forward = types.MethodType(patched_opm_forward, opm_instance)
+        opm_instance.forward = types.MethodType(_patched_opm_forward, opm_instance)
         opm_instance.should_shuffle = True
         opm_instance.permuted_indices = None
         patch_count += 1
 
     model.core_stack._orig_forward = model.core_stack.forward
 
-    def core_stack_forward(self, *args, **kwargs):
+    def _core_stack_forward(self, *args, **kwargs):
         if len(args) > 0:
             msa = args[0]
         else:
@@ -337,6 +349,6 @@ def apply_shuffling_patch(model: MSAPairformer, layer_indices: list[int] | None 
 
         return self._orig_forward(*args, **kwargs)
 
-    model.core_stack.forward = types.MethodType(core_stack_forward, model.core_stack)
+    model.core_stack.forward = types.MethodType(_core_stack_forward, model.core_stack)
 
     print(f"Successfully patched {patch_count} layers.")
