@@ -7,10 +7,13 @@ import plotly.graph_objects as go
 import plotly.io as pio
 import torch
 from arcadia_pycolor.gradient import Gradient
+from matplotlib.colors import PowerNorm
 from arcadia_pycolor.style_defaults import DEFAULT_FONT, MONOSPACE_FONT
 from ete3 import NodeStyle, TextFace, Tree, TreeStyle
 from plotly.subplots import make_subplots
-from scipy.stats import spearmanr
+import statsmodels.formula.api as smf
+from scipy.stats import spearmanr, zscore
+from statsmodels.stats.anova import anova_lm
 
 from analysis.regression import regress_and_analyze_features
 from analysis.tree import get_patristic_distance, read_newick
@@ -196,6 +199,8 @@ def tree_style_with_scalar_annotation(
                     break
             else:
                 node_style["fgcolor"] = "#000000"
+        else:
+            node_style["size"] = 0
 
         node.set_style(node_style)
 
@@ -892,6 +897,102 @@ def stacked_feature_importance_plot(
     apc.plotly.style_plot(fig, monospaced_axes="x")
 
     return fig
+
+
+def multivariate_regression_figures(df: pd.DataFrame) -> None:
+    features = [
+        "Phylogenetic diversity",
+        "Colless",
+        "Cherry count",
+        "Ultrametricity CV",
+        "Patristic mean",
+        "Patristic std",
+        "Query centrality",
+    ]
+
+    df_original = df.copy()
+    df_zscore = df.copy()
+    for feature in features:
+        df_zscore[feature] = zscore(df_zscore[feature])
+
+    formula = 'Q("Adjusted R2") ~ ' + " + ".join(f'Q("{f}")' for f in features)
+    lm = smf.ols(formula, data=df_zscore).fit()
+
+    anova_results = anova_lm(lm, typ=3)
+    anova_feature_names = [f'Q("{f}")' for f in features]
+    feature_ss = anova_results.loc[anova_feature_names, "sum_sq"]
+    total_feature_ss = feature_ss.sum()
+    feature_proportions = feature_ss / total_feature_ss
+    feature_importance_pct = feature_proportions * lm.rsquared_adj * 100
+
+    importance_df = pd.DataFrame(
+        {"Feature": features, "Importance (%)": feature_importance_pct.values}
+    )
+
+    feature_colors = {
+        "Phylogenetic diversity": apc.lapis.hex_code,
+        "Patristic std": apc.fern.hex_code,
+    }
+    bar_colors = [feature_colors.get(f, "#E2E2E2") for f in features]
+
+    fig1, ax1 = plt.subplots()
+    ax1.bar(
+        importance_df["Feature"],
+        importance_df["Importance (%)"],
+        color=bar_colors,
+        edgecolor="black",
+        linewidth=2,
+        alpha=0.85,
+    )
+    for i, (_, row) in enumerate(importance_df.iterrows()):
+        is_highlighted = row["Feature"] in feature_colors
+        ax1.text(
+            i,
+            row["Importance (%)"] * 1.15,
+            f"{row['Importance (%)']:.1f}%",
+            ha="center",
+            va="bottom",
+            fontfamily=MONOSPACE_FONT,
+            fontweight="bold" if is_highlighted else "normal",
+        )
+    ax1.set_ylabel("Explained variance (%)")
+    ax1.set_yscale("log")
+    ax1.set_xticks(range(len(importance_df)))
+    ax1.set_xticklabels(importance_df["Feature"], rotation=45, ha="right")
+    apc.mpl.style_plot(ax1, monospaced_axes="y")
+    fig1.tight_layout()
+    plt.show()
+
+    fig2, ax2 = plt.subplots()
+    ax2.hexbin(
+        df_original["Phylogenetic diversity"],
+        df_original["Adjusted R2"],
+        gridsize=25,
+        cmap=apc.gradients.blues.reverse().to_mpl_cmap(),
+        mincnt=1,
+        norm=PowerNorm(gamma=0.85),
+    )
+    ax2.set_xlabel("Phylogenetic diversity")
+    ax2.set_ylabel("Adjusted R²")
+    apc.mpl.style_plot(ax2, monospaced_axes="both")
+    fig2.tight_layout()
+    plt.show()
+
+    fig3, ax3 = plt.subplots()
+    ax3.hexbin(
+        df_original["Patristic std"],
+        df_original["Adjusted R2"],
+        gridsize=25,
+        cmap=apc.gradients.greens.reverse().to_mpl_cmap(),
+        mincnt=1,
+        norm=PowerNorm(gamma=0.85),
+        xscale="log",
+    )
+    ax3.set_xlabel("Patristic std")
+    ax3.set_ylabel("Adjusted R²")
+    apc.mpl.style_plot(ax3, monospaced_axes="both")
+    fig3.tight_layout()
+    plt.show()
 
 
 def visualize_expected_vs_actual(
