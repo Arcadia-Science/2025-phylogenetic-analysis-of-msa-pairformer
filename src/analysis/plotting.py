@@ -17,6 +17,8 @@ from statsmodels.stats.anova import anova_lm
 
 from analysis.regression import regress_and_analyze_features
 from analysis.tree import get_patristic_distance, read_newick
+from ete3 import Tree as EteTree
+from scipy import stats
 from MSA_Pairformer.dataset import MSA
 
 # Set Plotly renderer for Quarto compatibility
@@ -246,7 +248,7 @@ def interactive_layer_weight_plot(
         shared_xaxes=True,
         shared_yaxes=True,
         x_title="Sequence weight",
-        y_title="Tree distance (patristic)",
+        y_title="Patristic distance",
         specs=[[{"type": "xy"}, {"type": "xy"}, {"type": "xy"}]],
     )
 
@@ -1051,3 +1053,175 @@ def visualize_expected_vs_actual(
     )
 
     return fig
+
+
+def tree_correlation_figures(
+    trees: dict[str, EteTree],
+    iq_trees: dict[str, EteTree],
+) -> None:
+    results = []
+    for query in iq_trees:
+        iqtree = iq_trees[query]
+        fasttree = trees[query]
+
+        iqtree_distances = get_patristic_distance(iqtree, query)
+        fasttree_distances = get_patristic_distance(fasttree, query)
+
+        df = pd.DataFrame({
+            "iqtree": iqtree_distances,
+            "fasttree": fasttree_distances,
+        }).dropna()
+
+        r, p = stats.pearsonr(df["iqtree"], df["fasttree"])
+        r2 = r ** 2
+
+        results.append({
+            "query": query,
+            "r": r,
+            "r2": r2,
+            "p": p,
+            "df": df,
+        })
+
+    results_sorted = sorted(results, key=lambda x: x["r2"], reverse=False)
+    queries_sorted = [r["query"] for r in results_sorted]
+    r2_sorted = [r["r2"] for r in results_sorted]
+
+    worst = results_sorted[0]
+    middle = results_sorted[4]
+    best = results_sorted[-1]
+
+    bar_colors = []
+    for r in results_sorted:
+        if r["query"] == best["query"]:
+            bar_colors.append(apc.aegean.hex_code)
+        elif r["query"] == middle["query"]:
+            bar_colors.append(apc.asparagus.hex_code)
+        elif r["query"] == worst["query"]:
+            bar_colors.append(apc.amber.hex_code)
+        else:
+            bar_colors.append("#E2E2E2")
+
+    fig1, ax1 = plt.subplots()
+    ax1.bar(
+        queries_sorted,
+        r2_sorted,
+        color=bar_colors,
+        edgecolor="black",
+        linewidth=2,
+        alpha=0.85,
+    )
+    ax1.set_ylabel(r"Method agreement ($R^2$)")
+    ax1.set_xticks(range(len(queries_sorted)))
+    ax1.set_xticklabels(queries_sorted, rotation=45, ha="right")
+    ax1.set_ylim(0, 1.1)
+    apc.mpl.style_plot(ax1, monospaced_axes="y")
+    fig1.tight_layout()
+    plt.show()
+
+    for result, color in [(worst, apc.amber), (middle, apc.asparagus), (best, apc.aegean)]:
+        df = result["df"]
+
+        fig, ax = plt.subplots()
+        ax.scatter(
+            df["iqtree"],
+            df["fasttree"],
+            alpha=0.6,
+            s=100,
+            color=color.hex_code,
+            edgecolor="none",
+        )
+
+        slope, intercept, _, _, _ = stats.linregress(df["iqtree"], df["fasttree"])
+        x_fit = np.array([df["iqtree"].min(), df["iqtree"].max()])
+        ax.plot(x_fit, slope * x_fit + intercept, color="#333333", linewidth=2.5)
+
+        max_val = max(df["iqtree"].max(), df["fasttree"].max())
+        ax.plot([0, max_val], [0, max_val], "k--", alpha=0.5, linewidth=2.5)
+
+        ax.set_xlabel("IQ-TREE patristic distance", fontsize=22)
+        ax.set_ylabel("FastTree patristic distance", fontsize=22)
+        ax.set_aspect("equal", adjustable="box")
+
+        apc.mpl.style_plot(ax, monospaced_axes="both")
+        ax.tick_params(axis="both", labelsize=18)
+        fig.tight_layout()
+        plt.show()
+
+
+def tree_method_comparison_figure(
+    tree_correlation_r2: dict[str, float],
+    fasttree_adj_r2: dict[str, float],
+    iqtree_adj_r2: dict[str, float],
+) -> None:
+    queries_sorted = sorted(
+        tree_correlation_r2.keys(),
+        key=lambda q: tree_correlation_r2[q],
+        reverse=False,
+    )
+    deltas = [iqtree_adj_r2[q] - fasttree_adj_r2[q] for q in queries_sorted]
+
+    worst_query = queries_sorted[0]
+    middle_query = queries_sorted[4]
+    best_query = queries_sorted[-1]
+
+    bar_colors = []
+    for q in queries_sorted:
+        if q == best_query:
+            bar_colors.append(apc.aegean.hex_code)
+        elif q == middle_query:
+            bar_colors.append(apc.asparagus.hex_code)
+        elif q == worst_query:
+            bar_colors.append(apc.amber.hex_code)
+        else:
+            bar_colors.append("#E2E2E2")
+
+    fig1, ax1 = plt.subplots()
+    ax1.bar(
+        queries_sorted,
+        deltas,
+        color=bar_colors,
+        edgecolor="black",
+        linewidth=2,
+        alpha=0.85,
+    )
+    ax1.axhline(0, color="black", linewidth=1, linestyle="-")
+    ax1.set_ylabel(r"$\Delta R^2_{\mathrm{adj}}$ (IQ-TREE − FastTree)", fontsize=18)
+    ax1.set_xticks(range(len(queries_sorted)))
+    ax1.set_xticklabels(queries_sorted, rotation=45, ha="right")
+    apc.mpl.style_plot(ax1, monospaced_axes="y")
+    ax1.tick_params(axis="both", labelsize=14)
+    fig1.tight_layout()
+    plt.show()
+
+    fig, ax = plt.subplots()
+
+    for query in queries_sorted:
+        x = tree_correlation_r2[query]
+        y_ft = fasttree_adj_r2[query]
+        y_iq = iqtree_adj_r2[query]
+
+        if query == best_query:
+            color = apc.aegean.hex_code
+        elif query == middle_query:
+            color = apc.asparagus.hex_code
+        elif query == worst_query:
+            color = apc.amber.hex_code
+        else:
+            color = "#333333"
+
+        ax.plot([x, x], [y_ft, y_iq], color=color, linewidth=1.5, zorder=1)
+        ax.scatter(x, y_ft, s=100, color=color, edgecolor="none", zorder=2)
+        ax.scatter(x, y_iq, s=100, facecolor="white", edgecolor=color, linewidth=2, zorder=2)
+
+    ax.scatter([], [], s=100, color="#333333", edgecolor="none", label="FastTree")
+    ax.scatter([], [], s=100, facecolor="white", edgecolor="#333333", linewidth=2, label="IQ-TREE")
+
+    ax.set_xlabel(r"Method agreement ($R^2$)")
+    ax.set_ylabel(r"$R^2_{\mathrm{adj}}$")
+    ax.legend(loc="upper left", bbox_to_anchor=(0.02, 0.98))
+
+    apc.mpl.style_plot(ax, monospaced_axes="both")
+    ax.tick_params(axis="both")
+    fig.tight_layout()
+    plt.show()

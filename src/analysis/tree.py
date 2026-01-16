@@ -1,5 +1,6 @@
 import asyncio
 import random
+import shutil
 import subprocess
 import tempfile
 from pathlib import Path
@@ -9,11 +10,105 @@ import pandas as pd
 from ete3 import Tree
 from scipy import stats
 
+from src.analysis.sequence import reformat_alignment
 
-def run_fasttree(alignment_file: Path, output_file: Path, quiet: bool = False) -> None:
-    stderr = subprocess.DEVNULL if quiet else None
-    with open(output_file, "w") as f:
-        subprocess.run(["FastTree", str(alignment_file)], stdout=f, stderr=stderr, check=True)
+
+def run_iqtree(
+    alignment_file: Path, output_file: Path, quiet: bool = False, log_file: Path | None = None
+) -> None:
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tmpdir_path = Path(tmpdir)
+
+        if alignment_file.suffix == ".a3m":
+            aln_path = tmpdir_path / "aln.fasta"
+            reformat_alignment(alignment_file, aln_path, "a3m", "fas")
+        else:
+            aln_path = tmpdir_path / alignment_file.name
+            shutil.copy(alignment_file, aln_path)
+
+        prefix = tmpdir_path / "iqtree_run"
+        cmd = [
+            "iqtree",
+            "-s",
+            str(aln_path),
+            "-pre",
+            str(prefix),
+            "-nt",
+            "AUTO",
+        ]
+
+        if log_file is not None:
+            with open(log_file, "w") as log_f:
+                subprocess.run(cmd, stdout=log_f, stderr=subprocess.STDOUT, check=True)
+        else:
+            stderr = subprocess.DEVNULL if quiet else None
+            stdout = subprocess.DEVNULL if quiet else None
+            subprocess.run(cmd, stdout=stdout, stderr=stderr, check=True)
+
+        treefile = prefix.with_suffix(".treefile")
+        shutil.copy(treefile, output_file)
+
+
+async def run_iqtree_async(
+    input_a3m: Path,
+    output_newick: Path,
+    log_file: Path,
+    semaphore: asyncio.Semaphore,
+) -> None:
+    async with semaphore:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            tmpdir_path = Path(tmpdir)
+            fasta_path = tmpdir_path / "aln.fasta"
+
+            reformat_process = await asyncio.create_subprocess_exec(
+                "reformat.pl",
+                "a3m",
+                "fas",
+                str(input_a3m),
+                str(fasta_path),
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+            await reformat_process.wait()
+
+            prefix = tmpdir_path / "iqtree_run"
+            with open(log_file, "w") as log_f:
+                iqtree_process = await asyncio.create_subprocess_exec(
+                    "iqtree",
+                    "-s",
+                    str(fasta_path),
+                    "-pre",
+                    str(prefix),
+                    "-nt",
+                    "1",
+                    stdout=log_f,
+                    stderr=subprocess.STDOUT,
+                )
+                await iqtree_process.wait()
+
+            treefile = prefix.with_suffix(".treefile")
+            shutil.copy(treefile, output_newick)
+
+
+def run_fasttree(
+    alignment_file: Path, output_file: Path, quiet: bool = False, log_file: Path | None = None
+) -> None:
+    def _run(aln_path: Path) -> None:
+        if log_file is not None:
+            with open(output_file, "w") as f, open(log_file, "w") as log_f:
+                subprocess.run(["FastTree", str(aln_path)], stdout=f, stderr=log_f, check=True)
+        else:
+            stderr = subprocess.DEVNULL if quiet else None
+            with open(output_file, "w") as f:
+                subprocess.run(["FastTree", str(aln_path)], stdout=f, stderr=stderr, check=True)
+
+    if alignment_file.suffix == ".a3m":
+        with tempfile.TemporaryDirectory() as tmpdir:
+            fasta_path = Path(tmpdir) / "aln.fasta"
+            reformat_alignment(alignment_file, fasta_path, "a3m", "fas")
+            _run(fasta_path)
+    else:
+        _run(alignment_file)
 
 
 async def run_fasttree_async(
@@ -391,7 +486,8 @@ def get_root_to_tip_distances(tree: Tree) -> pd.Series:
 def ultrametricity_cv(tree: Tree) -> float:
     """Calculate coefficient of variation of root-to-tip distances.
 
-    Perfect ultrametric trees have CV = 0. This is a scale-free measure.
+    Perfect ultrametric trees have CV = 0. This is a scale-free measure. Trees are
+    midpoint rooted.
 
     Args:
         tree: The phylogenetic tree
@@ -399,6 +495,9 @@ def ultrametricity_cv(tree: Tree) -> float:
     Returns:
         Coefficient of variation (std / mean) of root-to-tip distances
     """
+    tree = tree.copy()
+    tree.set_outgroup(tree.get_midpoint_outgroup())
+
     distances = _root_to_tip_distances(tree)
     mean_dist = np.mean(distances)
     std_dist = np.std(distances, ddof=1)
