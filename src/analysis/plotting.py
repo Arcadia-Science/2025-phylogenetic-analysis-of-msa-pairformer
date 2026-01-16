@@ -5,20 +5,20 @@ import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
+import statsmodels.formula.api as smf
 import torch
 from arcadia_pycolor.gradient import Gradient
-from matplotlib.colors import PowerNorm
 from arcadia_pycolor.style_defaults import DEFAULT_FONT, MONOSPACE_FONT
 from ete3 import NodeStyle, TextFace, Tree, TreeStyle
+from ete3 import Tree as EteTree
+from matplotlib.colors import PowerNorm
 from plotly.subplots import make_subplots
-import statsmodels.formula.api as smf
+from scipy import stats
 from scipy.stats import spearmanr, zscore
 from statsmodels.stats.anova import anova_lm
 
 from analysis.regression import regress_and_analyze_features
-from analysis.tree import get_patristic_distance, read_newick
-from ete3 import Tree as EteTree
-from scipy import stats
+from analysis.tree import get_patristic_distance
 from MSA_Pairformer.dataset import MSA
 
 # Set Plotly renderer for Quarto compatibility
@@ -1067,21 +1067,25 @@ def tree_correlation_figures(
         iqtree_distances = get_patristic_distance(iqtree, query)
         fasttree_distances = get_patristic_distance(fasttree, query)
 
-        df = pd.DataFrame({
-            "iqtree": iqtree_distances,
-            "fasttree": fasttree_distances,
-        }).dropna()
+        df = pd.DataFrame(
+            {
+                "iqtree": iqtree_distances,
+                "fasttree": fasttree_distances,
+            }
+        ).dropna()
 
         r, p = stats.pearsonr(df["iqtree"], df["fasttree"])
-        r2 = r ** 2
+        r2 = r**2
 
-        results.append({
-            "query": query,
-            "r": r,
-            "r2": r2,
-            "p": p,
-            "df": df,
-        })
+        results.append(
+            {
+                "query": query,
+                "r": r,
+                "r2": r2,
+                "p": p,
+                "df": df,
+            }
+        )
 
     results_sorted = sorted(results, key=lambda x: x["r2"], reverse=False)
     queries_sorted = [r["query"] for r in results_sorted]
