@@ -1,5 +1,5 @@
 pub:
   org: "Arcadia-Science"
   repo: "2025-phylogenetic-analysis-of-msa-pairformer"
-  title: "This is the title for the notebook pub template"
+  title: "MSA-based pLMs encode evolutionary distance but don’t reliably exploit it"
   google_analytics_id: "G-RPMEDR0GB1"
