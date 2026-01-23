@@ -12,6 +12,7 @@ from arcadia_pycolor.style_defaults import DEFAULT_FONT, MONOSPACE_FONT
 from ete3 import NodeStyle, TextFace, Tree, TreeStyle
 from ete3 import Tree as EteTree
 from matplotlib.colors import PowerNorm
+from MSA_Pairformer.dataset import MSA
 from plotly.subplots import make_subplots
 from scipy import stats
 from scipy.stats import spearmanr, zscore
@@ -19,7 +20,6 @@ from statsmodels.stats.anova import anova_lm
 
 from analysis.regression import regress_and_analyze_features
 from analysis.tree import get_patristic_distance
-from MSA_Pairformer.dataset import MSA
 
 # Set Plotly renderer for Quarto compatibility
 pio.renderers.default = "plotly_mimetype+notebook_connected"

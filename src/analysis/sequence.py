@@ -8,7 +8,6 @@ from typing import Literal
 import biotite.sequence as seq
 import biotite.sequence.io.fasta as fasta
 from ete3 import Tree
-
 from MSA_Pairformer.MSA_Pairformer.dataset import MSA
 
 

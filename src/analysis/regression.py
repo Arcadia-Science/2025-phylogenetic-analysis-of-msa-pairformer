@@ -7,7 +7,8 @@ from statsmodels.regression.linear_model import RegressionResultsWrapper
 
 
 def regress_and_analyze_features(
-    sequence_weights: np.ndarray, patristic_distances: np.ndarray,
+    sequence_weights: np.ndarray,
+    patristic_distances: np.ndarray,
 ) -> tuple[RegressionResultsWrapper, pd.DataFrame]:
     """Performs linear regression and a Type III ANOVA for feature importance.
 
@@ -41,8 +42,8 @@ def regress_and_analyze_features(
 
     anova_results_list = []
     for i in range(k):
-        mask = np.ones(k+1, dtype=bool)  # Add 1 to account for constant term
-        mask[i+1] = False
+        mask = np.ones(k + 1, dtype=bool)  # Add 1 to account for constant term
+        mask[i + 1] = False
 
         X_reduced = X_with_const[:, mask]
         sm_model_reduced = sm.OLS(y_normalized, X_reduced).fit()
@@ -107,14 +108,14 @@ if __name__ == "__main__":
 
     min_val = min(y_actual.min(), y_pred.min())
     max_val = max(y_actual.max(), y_pred.max())
-    ax.plot([min_val, max_val], [min_val, max_val], 'r--', lw=2, label='1:1 line')
+    ax.plot([min_val, max_val], [min_val, max_val], "r--", lw=2, label="1:1 line")
 
-    ax.set_xlabel('Actual Values', fontsize=12)
-    ax.set_ylabel('Predicted Values', fontsize=12)
-    ax.set_title(f'Predicted vs Actual\nR² = {model.rsquared:.4f}', fontsize=14)
+    ax.set_xlabel("Actual Values", fontsize=12)
+    ax.set_ylabel("Predicted Values", fontsize=12)
+    ax.set_title(f"Predicted vs Actual\nR² = {model.rsquared:.4f}", fontsize=14)
     ax.legend()
     ax.grid(True, alpha=0.3)
-    ax.set_aspect('equal', adjustable='box')
+    ax.set_aspect("equal", adjustable="box")
 
     plt.tight_layout()
     plt.show()

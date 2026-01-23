@@ -1,16 +1,16 @@
 from pathlib import Path
 from typing import Protocol
 
-import numpy as np
 import pandas as pd
 import pytest
+from ete3 import Tree
+
 from analysis.tree import (
     cherry_count_statistic,
     colless_statistic,
     distance_laplacian_spectrum,
     phylogenetic_diversity_statistic,
 )
-from ete3 import Tree
 
 TREE_DATA_DIR = Path(__file__).parent / "tree_data"
 

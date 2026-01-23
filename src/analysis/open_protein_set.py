@@ -82,8 +82,8 @@ def fetch_all_ids(cache_file: Path) -> list[str]:
 
     return ids
 
-if __name__ == "__main__":
 
+if __name__ == "__main__":
     pdb_path = Path("./data/uniclust30/pdbs/")
     path = fetch_pdb("A0A0F9VGA8", pdb_path, get_s3_client())
     print(path)

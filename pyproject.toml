@@ -19,7 +19,7 @@ MSA_Pairformer = "MSA_Pairformer/MSA_Pairformer"
 
 [tool.ruff]
 # The directories to consider when resolving first- vs. third-party imports
-src = ["."]
+src = ["src"]
 line-length = 100
 indent-width = 4
 
@@ -27,7 +27,7 @@ indent-width = 4
 extend-include = ["*.ipynb"]
 
 # exclude MSA_Pairformer submodule from formatting
-exclude = ["MSA_Pairformer"]
+exclude = ["MSA_Pairformer", "msa_difficulty/run_pythia.py", "src/analysis/pairformer.py"]
 
 [tool.ruff.lint.per-file-ignores]
 # ignore star and unused imports

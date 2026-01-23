@@ -4,16 +4,16 @@ from typing import Any
 
 import torch
 from einops import rearrange
-from torch.amp.autocast_mode import autocast
-
-from analysis.data import get_model_input_data, get_sequence_weight_data, to_cpu_dict
-from analysis.modal_infrastructure import image, runnable_on_modal, volume
-from analysis.utils import progress
 from MSA_Pairformer.core import exists
 from MSA_Pairformer.custom_typing import Bool, Float
 from MSA_Pairformer.dataset import MSA
 from MSA_Pairformer.model import MSAPairformer
 from MSA_Pairformer.outer_product import OuterProduct, PresoftmaxDifferentialOuterProductMean
+from torch.amp.autocast_mode import autocast
+
+from analysis.data import get_model_input_data, get_sequence_weight_data, to_cpu_dict
+from analysis.modal_infrastructure import image, runnable_on_modal, volume
+from analysis.utils import progress
 
 
 @runnable_on_modal(

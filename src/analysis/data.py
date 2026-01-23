@@ -1,7 +1,6 @@
 from typing import Any
 
 import torch
-
 from MSA_Pairformer.dataset import MSA, aa2tok_d, prepare_msa_masks
 
 

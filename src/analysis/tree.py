@@ -9,7 +9,6 @@ import numpy as np
 import pandas as pd
 from ete3 import Tree
 from scipy import stats
-
 from src.analysis.sequence import reformat_alignment
 
 
