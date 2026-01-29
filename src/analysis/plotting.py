@@ -54,8 +54,8 @@ def tree_style_with_highlights(
         node_style = NodeStyle()
         node_style["hz_line_width"] = line_width
         node_style["vt_line_width"] = line_width
-        node_style["hz_line_color"] = "#666666"
-        node_style["vt_line_color"] = "#666666"
+        node_style["hz_line_color"] = apc.bark.hex_code
+        node_style["vt_line_color"] = apc.bark.hex_code
 
         if node.is_leaf():
             is_highlighted = any(key in node.name for key in highlight)
@@ -74,7 +74,9 @@ def tree_style_with_highlights(
             else:
                 node_style["shape"] = "circle"
                 node_style["size"] = 8
-                node_style["fgcolor"] = "#666666"
+                node_style["fgcolor"] = apc.marine.hex_code
+        else:
+            node_style["size"] = 0
 
         node.set_style(node_style)
 
@@ -105,8 +107,8 @@ def tree_style_with_categorical_annotation(
         node_style = NodeStyle()
         node_style["hz_line_width"] = 2
         node_style["vt_line_width"] = 2
-        node_style["hz_line_color"] = "#666666"
-        node_style["vt_line_color"] = "#666666"
+        node_style["hz_line_color"] = apc.bark.hex_code
+        node_style["vt_line_color"] = apc.bark.hex_code
 
         if node.is_leaf():
             is_highlighted = highlight and any(key in node.name for key in highlight)
@@ -131,6 +133,8 @@ def tree_style_with_categorical_annotation(
                     break
             else:
                 node_style["fgcolor"] = "#000000"
+        else:
+            node_style["size"] = 0
 
         node.set_style(node_style)
 
@@ -174,8 +178,8 @@ def tree_style_with_scalar_annotation(
         node_style = NodeStyle()
         node_style["hz_line_width"] = 2
         node_style["vt_line_width"] = 2
-        node_style["hz_line_color"] = "#333333"
-        node_style["vt_line_color"] = "#333333"
+        node_style["hz_line_color"] = apc.bark.hex_code
+        node_style["vt_line_color"] = apc.bark.hex_code
 
         if node.is_leaf():
             is_highlighted = highlight and any(key in node.name for key in highlight)
@@ -935,16 +939,14 @@ def multivariate_regression_figures(df: pd.DataFrame) -> None:
         "Phylogenetic diversity": apc.lapis.hex_code,
         "Patristic std": apc.fern.hex_code,
     }
-    bar_colors = [feature_colors.get(f, "#E2E2E2") for f in features]
+    bar_colors = [feature_colors.get(f, apc.shell.hex_code) for f in features]
 
     fig1, ax1 = plt.subplots()
     ax1.bar(
         importance_df["Feature"],
         importance_df["Importance (%)"],
         color=bar_colors,
-        edgecolor="black",
-        linewidth=2,
-        alpha=0.85,
+        edgecolor="none",
     )
     for i, (_, row) in enumerate(importance_df.iterrows()):
         is_highlighted = row["Feature"] in feature_colors
@@ -985,7 +987,7 @@ def multivariate_regression_figures(df: pd.DataFrame) -> None:
         df_original["Patristic std"],
         df_original["Adjusted R2"],
         gridsize=25,
-        cmap=apc.gradients.greens.reverse().to_mpl_cmap(),
+        cmap=apc.gradients.sages.reverse().to_mpl_cmap(),
         mincnt=1,
         norm=PowerNorm(gamma=0.85),
         xscale="log",
@@ -995,64 +997,6 @@ def multivariate_regression_figures(df: pd.DataFrame) -> None:
     apc.mpl.style_plot(ax3, monospaced_axes="both")
     fig3.tight_layout()
     plt.show()
-
-
-def visualize_expected_vs_actual(
-    tree: Tree,
-    msa: MSA,
-    weights: torch.Tensor,
-    query: str,
-    color_map: dict[str, str] | None = None,
-):
-    tree = tree.copy()
-    dist_to_query = get_patristic_distance(tree, query)[msa.ids_l].values
-    dist_to_query = dist_to_query[dist_to_query > 0]
-    weights = weights.clone()[1:, :]
-    model, _ = regress_and_analyze_features(weights, dist_to_query)
-
-    y_pred = model.fittedvalues
-    y_actual = model.model.endog
-    rho, _ = spearmanr(y_pred, y_actual)
-
-    fig, ax = plt.subplots()
-
-    min_val = min(y_actual.min(), y_pred.min())
-    max_val = max(y_actual.max(), y_pred.max())
-    ax.plot([min_val, max_val], [min_val, max_val], "k-", lw=1)
-
-    if color_map is not None:
-        ids = [id for id in msa.ids_l if id in color_map]
-        colors = [color_map[id] for id in ids]
-        ax.scatter(y_actual, y_pred, c=colors, alpha=0.7, s=50)
-    else:
-        ax.scatter(y_actual, y_pred, alpha=0.7, s=50)
-
-    ax.set_xlabel("Actual (standard normalized)")
-    ax.set_ylabel("Predicted (standard normalized)")
-    ax.set_aspect("equal", adjustable="box")
-
-    apc.mpl.style_plot(ax, monospaced_axes="both")
-
-    annotation_text = (
-        f"R²: {model.rsquared:.3f}\nR² Adjusted: {model.rsquared_adj:.3f}\nSpearman: {rho:.3f}"
-    )
-    ax.text(
-        0.05,
-        0.95,
-        annotation_text,
-        transform=ax.transAxes,
-        fontsize=10,
-        fontfamily=MONOSPACE_FONT,
-        verticalalignment="top",
-        bbox=dict(
-            facecolor="#FFFFFF",
-            edgecolor="#444444",
-            linewidth=1.0,
-            alpha=0.8,
-        ),
-    )
-
-    return fig
 
 
 def tree_correlation_figures(
@@ -1100,20 +1044,18 @@ def tree_correlation_figures(
         if r["query"] == best["query"]:
             bar_colors.append(apc.aegean.hex_code)
         elif r["query"] == middle["query"]:
-            bar_colors.append(apc.asparagus.hex_code)
+            bar_colors.append(apc.canary.hex_code)
         elif r["query"] == worst["query"]:
             bar_colors.append(apc.amber.hex_code)
         else:
-            bar_colors.append("#E2E2E2")
+            bar_colors.append(apc.shell.hex_code)
 
     fig1, ax1 = plt.subplots()
     ax1.bar(
         queries_sorted,
         r2_sorted,
         color=bar_colors,
-        edgecolor="black",
-        linewidth=2,
-        alpha=0.85,
+        edgecolor="none",
     )
     ax1.set_ylabel(r"Method agreement ($R^2$)")
     ax1.set_xticks(range(len(queries_sorted)))
@@ -1123,7 +1065,7 @@ def tree_correlation_figures(
     fig1.tight_layout()
     plt.show()
 
-    for result, color in [(worst, apc.amber), (middle, apc.asparagus), (best, apc.aegean)]:
+    for result, color in [(worst, apc.amber), (middle, apc.canary), (best, apc.aegean)]:
         df = result["df"]
 
         fig, ax = plt.subplots()
@@ -1174,20 +1116,18 @@ def tree_method_comparison_figure(
         if q == best_query:
             bar_colors.append(apc.aegean.hex_code)
         elif q == middle_query:
-            bar_colors.append(apc.asparagus.hex_code)
+            bar_colors.append(apc.canary.hex_code)
         elif q == worst_query:
             bar_colors.append(apc.amber.hex_code)
         else:
-            bar_colors.append("#E2E2E2")
+            bar_colors.append(apc.shell.hex_code)
 
     fig1, ax1 = plt.subplots()
     ax1.bar(
         queries_sorted,
         deltas,
         color=bar_colors,
-        edgecolor="black",
-        linewidth=2,
-        alpha=0.85,
+        edgecolor="none",
     )
     ax1.axhline(0, color="black", linewidth=1, linestyle="-")
     ax1.set_ylabel(r"$\Delta R^2_{\mathrm{adj}}$ (IQ-TREE − FastTree)", fontsize=18)
@@ -1208,7 +1148,7 @@ def tree_method_comparison_figure(
         if query == best_query:
             color = apc.aegean.hex_code
         elif query == middle_query:
-            color = apc.asparagus.hex_code
+            color = apc.canary.hex_code
         elif query == worst_query:
             color = apc.amber.hex_code
         else:
