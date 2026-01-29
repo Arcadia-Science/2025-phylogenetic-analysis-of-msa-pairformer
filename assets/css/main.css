@@ -60,7 +60,7 @@
   --bs-code-color: var(--arcadia-dusk);
   --bs-code-bg-color: #f6f6f6;
   --bs-code-border-color: #e6e6e6;
-  --bs-code-left-border-color: #003b4f99;
+  --bs-code-left-border-color: var(--arcadia-pewter);
   --bs-link-color-rgb: var(--arcadia-dusk);
 
   --callout-note-rgb: var(--arcadia-pewter);
