@@ -6,19 +6,16 @@ import pandas as pd
 import plotly.graph_objects as go
 import plotly.io as pio
 import statsmodels.formula.api as smf
-import torch
 from arcadia_pycolor.gradient import Gradient
 from arcadia_pycolor.style_defaults import DEFAULT_FONT, MONOSPACE_FONT
-from ete3 import NodeStyle, TextFace, Tree, TreeStyle
+from ete3 import NodeStyle, TextFace, TreeStyle
 from ete3 import Tree as EteTree
 from matplotlib.colors import PowerNorm
-from MSA_Pairformer.dataset import MSA
 from plotly.subplots import make_subplots
 from scipy import stats
-from scipy.stats import spearmanr, zscore
+from scipy.stats import zscore
 from statsmodels.stats.anova import anova_lm
 
-from analysis.regression import regress_and_analyze_features
 from analysis.tree import get_patristic_distance
 
 # Set Plotly renderer for Quarto compatibility
