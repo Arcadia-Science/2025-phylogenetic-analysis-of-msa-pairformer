@@ -3,9 +3,7 @@ from pathlib import Path
 import biotite.structure.io as structio
 import numpy as np
 import torch
-from biotite.sequence import ProteinSequence
 from biotite.structure.atoms import AtomArray
-from biotite.structure.residues import get_residues
 from numpy.typing import NDArray
 
 
@@ -14,14 +12,6 @@ def load_structure(path: Path | str) -> AtomArray:
     structure = structio.load_structure(path)
     assert isinstance(structure, AtomArray)
     return structure
-
-
-def sequence_from_pdb(path: Path) -> str:
-    return sequence_from_structure(load_structure(path))
-
-
-def sequence_from_structure(structure: AtomArray) -> str:
-    return str(ProteinSequence(get_residues(structure)[1]))
 
 
 def calculate_long_range_p_at_l(
