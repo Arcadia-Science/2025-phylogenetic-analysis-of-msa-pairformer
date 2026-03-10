@@ -3,8 +3,8 @@ project:
   render:
   - '*.qmd'
   - '*.ipynb'
-  - 'examples/*.ipynb'
-  - 'pages/*.qmd'
+  - examples/*.ipynb
+  - pages/*.qmd
   - '!MSA_Pairformer/MSA_Pairformer_with_MMseqs2.ipynb'
   resources:
   - authors.yml
@@ -12,7 +12,7 @@ project:
 execute:
   freeze: auto
 website:
-  favicon: "_extensions/Arcadia-Science/arcadia-pub-theme/assets/logo_white.png"
+  favicon: _extensions/Arcadia-Science/arcadia-pub-theme/assets/logo_white.png
   twitter-card: true
   open-graph: true
   navbar:
@@ -22,7 +22,7 @@ website:
     left:
     - text: '{{< iconify qlementine-icons:version-control-16 >}}'
       menu:
-      - text: v01 (latest)
+      - text: v1.0 (latest)
         href: index.ipynb
     - text: '{{< iconify nrk:back >}} Back to Pub'
       href: index.ipynb
@@ -32,7 +32,7 @@ website:
     - text: Reproduce this pub
       href: pages/SETUP.qmd
     - text: Cite this pub
-      href: "#"
+      href: '#'
     - text: Contribute
       href: pages/CONTRIBUTING.qmd
     tools:
@@ -40,14 +40,15 @@ website:
       href: https://twitter.com/arcadiascience
     - icon: github
       href: https://github.com/{{< var pub.org >}}/{{< var pub.repo >}}
-    logo: "_extensions/Arcadia-Science/arcadia-pub-theme/assets/logo_text.png"
+    logo: _extensions/Arcadia-Science/arcadia-pub-theme/assets/logo_text.png
     logo-href: https://research.arcadiascience.com/
     background: white
     search: true
   page-footer:
     background: '#484B50'
     border: false
-    left: '[![](/_extensions/Arcadia-Science/arcadia-pub-theme/assets/logo_white.png){fig-alt="Arcadia-Science" width=65px}](https://www.arcadiascience.com/)
+    left: '[![](/_extensions/Arcadia-Science/arcadia-pub-theme/assets/logo_white.png){fig-alt="Arcadia-Science"
+      width=65px}](https://www.arcadiascience.com/)
 
       Copyright 2025, Arcadia Science
 
@@ -70,7 +71,7 @@ comments:
     input-position: top
 reference-location: margin
 bibliography: ref.bib
-csl: "_extensions/Arcadia-Science/arcadia-pub-theme/assets/arcadia.csl"
+csl: _extensions/Arcadia-Science/arcadia-pub-theme/assets/arcadia.csl
 code-annotations: hover
 html-table-processing: none
 filters:
