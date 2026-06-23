@@ -45,7 +45,7 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Run Pythia difficulty prediction on A3M files")
     parser.add_argument("a3m_dir", type=Path, help="Directory containing A3M files")
     parser.add_argument("--output", type=Path, default=Path("msa_difficulty.csv"), help="Output CSV file")
-    parser.add_argument("--raxml-path", type=Path, default=Path("/Users/evan/miniconda3/bin/raxml-ng"), help="Path to raxml-ng")
+    parser.add_argument("--raxml-path", type=Path, default=Path("raxml-ng"), help="Path to raxml-ng")
     parser.add_argument("--max-workers", type=int, default=12, help="Number of parallel workers")
     parser.add_argument("--save-interval", type=int, default=20, help="Save results every N completions")
     args = parser.parse_args()
