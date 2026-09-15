@@ -1,23 +1,27 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   <url>
-    <loc>https://Arcadia-Science.github.io/2025-phylogenetic-analysis-of-msa-pairformer/index.html</loc>
-    <lastmod>2026-09-15T16:10:40.597Z</lastmod>
-  </url>
-  <url>
-    <loc>https://Arcadia-Science.github.io/2025-phylogenetic-analysis-of-msa-pairformer/pages/SETUP.html</loc>
-    <lastmod>2026-09-15T16:10:40.599Z</lastmod>
-  </url>
-  <url>
-    <loc>https://Arcadia-Science.github.io/2025-phylogenetic-analysis-of-msa-pairformer/pages/CONTRIBUTING.html</loc>
-    <lastmod>2026-09-15T16:10:40.599Z</lastmod>
-  </url>
-  <url>
-    <loc>https://Arcadia-Science.github.io/2025-phylogenetic-analysis-of-msa-pairformer/pages/FAQ.html</loc>
-    <lastmod>2026-09-15T16:10:40.599Z</lastmod>
+    <loc>https://Arcadia-Science.github.io/2025-phylogenetic-analysis-of-msa-pairformer/index_v1.0.html</loc>
+    <lastmod>2026-09-15T17:46:59.175Z</lastmod>
   </url>
   <url>
     <loc>https://Arcadia-Science.github.io/2025-phylogenetic-analysis-of-msa-pairformer/examples/demo.html</loc>
-    <lastmod>2026-09-15T16:10:40.446Z</lastmod>
+    <lastmod>2026-09-15T17:46:58.975Z</lastmod>
+  </url>
+  <url>
+    <loc>https://Arcadia-Science.github.io/2025-phylogenetic-analysis-of-msa-pairformer/pages/FAQ.html</loc>
+    <lastmod>2026-09-15T17:46:59.177Z</lastmod>
+  </url>
+  <url>
+    <loc>https://Arcadia-Science.github.io/2025-phylogenetic-analysis-of-msa-pairformer/pages/CONTRIBUTING.html</loc>
+    <lastmod>2026-09-15T17:46:59.177Z</lastmod>
+  </url>
+  <url>
+    <loc>https://Arcadia-Science.github.io/2025-phylogenetic-analysis-of-msa-pairformer/pages/SETUP.html</loc>
+    <lastmod>2026-09-15T17:46:59.177Z</lastmod>
+  </url>
+  <url>
+    <loc>https://Arcadia-Science.github.io/2025-phylogenetic-analysis-of-msa-pairformer/index.html</loc>
+    <lastmod>2026-09-15T17:46:59.144Z</lastmod>
   </url>
 </urlset>
